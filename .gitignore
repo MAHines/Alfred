@@ -1,0 +1,6 @@
+# Secret files
+.streamlit/secrets.toml
+
+# Drawings
+assets/Hobbes_glasses.psd
+
