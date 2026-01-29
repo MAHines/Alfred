@@ -1,9 +1,11 @@
 import streamlit as st
 import tomlkit
+import os
 from tomlkit import comment, document, nl, table
 from pathlib import Path
 from datetime import datetime
 import gspread
+from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 
 def read_prefs():
@@ -28,6 +30,12 @@ def write_prefs():
     config['user']['late_minutes'].trivia.comment = '  # If you are later than LATEMINUTES, you are tardy'
     config['user'].add('start_date', toml_dict['user']['start_date'])
     config['user']['start_date'].trivia.comment = '    # Monday of first week of labs'
+    config['user'].add('spreadsheet_name', toml_dict['user']['spreadsheet_name'])
+    config['user']['spreadsheet_name'].trivia.comment = '    # Spreadsheet name'
+    config['user'].add('allowed_classes', toml_dict['user']['allowed_classes'])
+    config['user']['allowed_classes'].trivia.comment = '    # Allowed classes e.g., 2070, 2510, Test'
+    config['user'].add('skip_days', toml_dict['user']['skip_days'])
+    config['user']['skip_days'].trivia.comment = '    # Skipped days e.g., 2070: [], 2510: [2026-02-12, 2026-02-13], Test: []'
     config.add(nl())
     
     # Dump the modified configument to a string
@@ -45,10 +53,36 @@ def open_google_sheet():
     google_service_account_info = st.secrets['google_service_account']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(google_service_account_info, scope)
     client = gspread.authorize(creds)
-    return client.open('Card Swipe Shared Sheet')
+    return client.open(st.session_state['toml_dict']['user']['spreadsheet_name'])
+
+def check_if_sheet_exists(sheet_title):
+    """
+    Checks if a worksheet with the given title exists in the spreadsheet.
+
+    Returns:
+        True if the sheet exists, False otherwise.
+    """
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
+                 "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+        google_service_account_info = st.secrets['google_service_account']
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(google_service_account_info, scope)
+        client = gspread.authorize(creds)
+        client.open(sheet_title)
+        # print(f"The sheet '{sheet_title}' exists.")
+        return True
+
+    except WorksheetNotFound:
+        # print(f"The sheet '{sheet_title}' does not exist.")
+        return False
+    except Exception as e:
+        # print(f"An error occurred: {e}")
+        return False
+
     
 def shared_sidebar():
-    st.sidebar.image('assets/Hobbes_glasses.png')
+    image_path = os.path.join(os.path.dirname(__file__), 'assets/Hobbes_glasses.png')
+    st.sidebar.image(image_path)
     st.sidebar.write("Melissa.Hines@cornell.edu")
 
 def is_float(input):

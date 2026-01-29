@@ -6,7 +6,8 @@ st.set_page_config(layout='wide')
 
 def Home():
     with st.container(horizontal_alignment="center"): #
-        st.image("assets/Alfred.png", width=250)
+        image_path = os.path.join(os.path.dirname(__file__), 'assets/Alfred.png')
+        st.image(image_path, width=250)
     st.html('<div style="text-align: center;font-size: 44px;font-weight: bold">Welcome to Alfred </div>')
     utils.shared_sidebar()
 

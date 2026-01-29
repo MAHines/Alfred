@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import utils
 import plotly.express as px
 import streamlit.components.v1 as components
 
@@ -118,7 +117,7 @@ def reset_uploader():
     st.session_state['file_uploaded'] = False
     st.session_state['uploaded_file_data'] = None
     st.session_state['analysis_done'] = False
-    st.session_state['analysis_name'] = 'Analyze Gradescope Evaluations'
+    st.session_state['analysis_name'] = 'Analyze Exported Evaluations'
     st.session_state['current_problem'] = 'Analysis of All Problems'
     # No need to explicitly clear the widget's value here;
     # hiding and showing it again effectively resets it.
@@ -192,7 +191,7 @@ st.header(st.session_state['current_problem'])
 if not st.session_state['file_uploaded']:
     # Display the uploader only if no file has been uploaded yet
     st.file_uploader(
-        "## Go to a Gradescope Assignment and use Export Evaluations to geneate a folder of files. Drop your file(s) or folder of files here:",
+        "Upload your file(s) here:",
         type=['csv'],
         accept_multiple_files=True,
         key = 'uploader_key',
@@ -204,7 +203,7 @@ else:
 allData = st.sidebar.checkbox('Show all data.', key = 'all_data_checkbox')
 allGraderData = st.sidebar.checkbox('Show all grader data', key = 'all_grader_data_checkbox')
 
-# Performs the analysis if an unanalyzed file/folder of data exists
+# Performs the analysi if an unanalyzed file/folder of data exists
 if st.session_state['file_uploaded'] and not st.session_state['analysis_done']:
 
     nameOfAnalysis_dialog()
@@ -303,5 +302,3 @@ if st.session_state['file_uploaded'] and st.session_state['analysis_done']:
                             key = 'problem_select_box',
                             on_change=handle_problem_change)
 
-st.sidebar.markdown("---")
-utils.shared_sidebar()

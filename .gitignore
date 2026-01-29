@@ -4,3 +4,6 @@
 # Drawings
 assets/Hobbes_glasses.psd
 
+__pycache__
+.DS_Store
+

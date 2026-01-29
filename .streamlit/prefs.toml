@@ -2,6 +2,9 @@
 
 [user]
 version = "1.0"
-late_minutes = 5.0  # If you are later than LATEMINUTES, you are tardy
-start_date = "2026-02-02"    # Monday of first week of labs
+late_minutes = 5.0          # If you are later than LATEMINUTES, you are tardy
+start_date = "2026-01-26"                    # Monday of first week of labs
+spreadsheet_name = "Lab Attendance, Spring 2026"                    # Spreadsheet name
+allowed_classes = "2070, 2510, Test"                    # Allowed classes e.g., 2070, 2510, Test
+skip_days = "2070: [], 2510: ['2026-02-12', '2026-02-13'], Test: ['2026-02-12', '2026-02-13']"                    # Skipped days e.g., 2070: [], 2510: [2026-02-12, 2026-02-13], Test: []
 
