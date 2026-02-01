@@ -7,9 +7,11 @@ from datetime import datetime
 import gspread
 from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
+import time
 
 def read_prefs():
-    with open('.streamlit/prefs.toml', 'r') as fp:
+    filePath = os.path.join(os.path.dirname(__file__), '.streamlit', 'prefs.toml')
+    with open(filePath, 'r') as fp:
         config = tomlkit.load(fp)
     
     st.session_state['toml_dict'] = dict(config)
@@ -81,7 +83,8 @@ def check_if_sheet_exists(sheet_title):
 
     
 def shared_sidebar():
-    image_path = os.path.join(os.path.dirname(__file__), 'assets/Hobbes_glasses.png')
+    image_path = os.path.join(os.path.dirname(__file__), 'assets', 'Hobbes_glasses.png')
+    #unique_image_path = f"{image_path}?{time.time()}"
     st.sidebar.image(image_path)
     st.sidebar.write("Melissa.Hines@cornell.edu")
 

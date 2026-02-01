@@ -14,7 +14,11 @@ This module handles the settings for the various modules. The data are stored in
 – pip install watchdog  
 – cd to folder that will contain Alfred  
 – git clone https://github.com/MAHines/Alfred.git   
-– copy secrets.toml to Alfred/.streamlit  
+– copy secrets.toml to Alfred/.streamlit
+
+_Note 1:_ The folder Alfred/.streamlit is hidden by default. To show/hide invisible folders, press command + shift + . (period).  
+
+_Note 2:_ To obtain secrets.toml for Cornell Chemistry, e-mail Melissa.Hines@cornell.edu. 
 
 ## Running Alfred from the command line
 – cd to Alfred folder  

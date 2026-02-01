@@ -10,6 +10,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import re
 import ast
 import plotly.express as px
+import plotly.graph_objects as go
 
 
 def read_timesheet():
@@ -28,7 +29,7 @@ def read_timesheet():
     timesheet_df['Log time'] = pd.to_datetime(timesheet_df['Log time'], format = '%a, %d %b %y, %I:%M %p')
     timesheet_df.rename(columns = {'section': 'loggedSection'}, inplace = True)
     timesheet_df.rename(columns = {'ID': 'enteredID'}, inplace = True)
-
+    
     # Take care of "skipped days." For example, if 2/12 and 2/13 were skipped, then those students attended on 2/19 and 2/20,
     #   Therefore, we will 'pretend' 2/19 = 2/12 and 2/20 = 2/13.
     start_key = st.session_state['timesheetName'][-4:] + ':'
@@ -36,21 +37,21 @@ def read_timesheet():
     content_start = st.session_state['toml_dict']['user']['skip_days'].find('[', start_marker)
     content_end = st.session_state['toml_dict']['user']['skip_days'].find(']', content_start)
     skip_days_str = st.session_state['toml_dict']['user']['skip_days'][content_start:content_end + 1]
-    datetime_skip_days = pd.to_datetime(ast.literal_eval(skip_days_str)).date
+    date_strings = skip_days_str.strip('[]').replace(' ', '').split(',')
+    datetime_skip_days = [pd.to_datetime(date_str).date() for date_str in date_strings]
     datetime_adv_days = [dt + timedelta(weeks=1) for dt in datetime_skip_days]  # Dates that replaced skipped days
     
     target_dates = datetime_adv_days   # List of dates to target
     mask = timesheet_df['Log time'].dt.date.isin(target_dates)   # Mask of df containing adv dates
     timesheet_df.loc[mask, 'Log time'] -= pd.offsets.DateOffset(weeks = 1)    # Here is where we fake the dates by subtracting a week
 
-    # Now open the sheet for the roster and read
-    st.session_state['rostersheet'] = sh.worksheet(st.session_state['rostersheetName'])
-    data = st.session_state['rostersheet'].get_all_values()
-    headers = data.pop(0)
-    roster_df = pd.DataFrame(data, columns = headers)
-
+    error, roster_df = read_roster_sheet(sh)
+    if error < 0:
+        return -1, roster_df
+    
     # Convert the roster into a mapping series for netID -> ID
     mapSeries_netID_to_ID = roster_df.set_index('netID')['ID']
+    mapSeries_ID_to_netID = roster_df.set_index('ID')['netID']
     mapSeries_ID_to_section = roster_df.set_index('ID')['section']
     mapSeries_ID_to_name = roster_df.set_index('ID')['studentName']
     
@@ -81,6 +82,48 @@ def read_timesheet():
     
     timesheet_df.rename(columns = {'actualID': 'ID'}, inplace = True)
     timesheet_df['studentName'] = timesheet_df['ID'].astype('string').map(mapSeries_ID_to_name)    
+    
+    # Clean up multiple swipes
+    timesheet_df['time since last'] = timesheet_df.groupby('ID')['Log time'].diff().dt.total_seconds()/60
+    timesheet_df['Remove'] = False
+    timesheet_df.loc[timesheet_df['time since last'] < 5.0, 'Remove'] = True
+    timesheet_df.sort_values(by=['TA','sectionAttended','Log time'], inplace = True)
+    rows_to_drop = timesheet_df[timesheet_df['Remove']].index
+    timesheet_df.drop(rows_to_drop, inplace=True)
+    cols_to_drop = ['Remove', 'time since last']
+    timesheet_df.drop(cols_to_drop, axis = 1, inplace = True)
+
+    # Infer actual TA to create a calculated roster
+    timesheet_df.rename(columns = {'TA': 'dayTA'}, inplace = True)
+    timesheet_df['TA'] = pd.NA
+    calcRoster_df = timesheet_df.groupby(['studentName', 'ID','sectionAssigned', 'inWrongSection','week']).agg(
+                                        dayTA = ('dayTA', 'first'),
+                                        sectionAttended = ('sectionAttended', 'first')
+                                        )
+    calcRoster_df = calcRoster_df.unstack().reset_index()
+    calcRoster_df = calcRoster_df[calcRoster_df['inWrongSection'] == False]    # Remove students in wrong section
+    temp_filtered = calcRoster_df.loc[:, ('dayTA', slice(None))]
+    temp_filtered.columns = temp_filtered.columns.get_level_values(1)
+    calcRoster_df['TA'] = temp_filtered.apply(find_most_common, axis=1)
+    keep_cols = ['studentName', 'ID','TA', 'sectionAssigned']
+    calcRoster_df = calcRoster_df[keep_cols]
+    calcRoster_df['netID'] = calcRoster_df['ID'].map(mapSeries_ID_to_netID)
+    calcRoster_df.columns = calcRoster_df.columns.get_level_values(0)
+
+    # Now set the actual TA in the timesheet
+    mapSeries_ID_to_TA = calcRoster_df.set_index('ID')['TA']
+    timesheet_df['TA'] = timesheet_df['ID'].map(mapSeries_ID_to_TA)
+    
+    # Calculate enrollment
+    enrollment_df = calcRoster_df.groupby(['TA', 'sectionAssigned']).agg(                     # Count unique students
+                                       Count = ('studentName', 'nunique'))
+                                       
+    # At this stage, calcRoster_df does not contain any students who have not attended their correct section at least once
+    #   so we need to recalculate
+    roster_df = timesheet_df[['studentName', 'ID','TA', 'sectionAssigned']].copy()
+    roster_df.drop_duplicates(inplace = True)
+    roster_df['netID'] = roster_df['ID'].map(mapSeries_ID_to_netID)
+    roster_df = roster_df[['studentName', 'ID','netID','TA', 'sectionAssigned']]
 
     # Reorder columns
     first_5_cols = ['studentName', 'TA', 'sectionAttended','inWrongSection']
@@ -89,28 +132,57 @@ def read_timesheet():
     new_col_order = first_5_cols + rem_cols
     timesheet_df = timesheet_df[new_col_order]
     
-    return timesheet_df
+#     st.markdown('## Roster & Timesheet_df')
+#     st.dataframe(roster_df)
+#     st.dataframe(enrollment_df)
+#     st.dataframe(timesheet_df)
+   
+    return 0, timesheet_df, roster_df, enrollment_df
 
-def produce_weekly_summary(timesheet_df):
-    wkSummary_df = timesheet_df.groupby(['studentName', 'TA','week']).agg(
+def find_most_common(row):
+    return row.mode()[0]
+
+def read_roster_sheet(sh):
+
+    # Now open the sheet for the roster and read
+    st.session_state['rostersheet'] = sh.worksheet(st.session_state['rostersheetName'])
+    data = st.session_state['rostersheet'].get_all_values()
+    headers = data.pop(0)
+    roster_df = pd.DataFrame(data, columns = headers)
+    roster_df.drop_duplicates(inplace = True)
+    
+    # We want to make sure each student is only entered once
+    duplicate_mask = roster_df.duplicated(subset=['ID'], keep=False)
+    duplicate_rows = roster_df[duplicate_mask]
+    
+    if len(duplicate_rows) > 0:
+        st.write(f'There are {int(len(duplicate_rows)/2)} students in multiple sections. This must be fixed before proceeding')
+        st.dataframe(duplicate_rows)
+        return -1, duplicate_rows
+    
+    return 0, roster_df
+
+def produce_summary(timesheet_df):
+    wkSummary_df = timesheet_df.groupby(['studentName', 'TA','week'], dropna=False).agg( 
                                             In = ('Log time', 'min'),
                                             Out = ('Log time', 'max'),
-                                            SectionAttended = ('sectionAttended', 'first'),
-                                            InWrongSection = ('inWrongSection', 'first')
+                                            sectionAttended = ('sectionAttended', 'first'),
+                                            InWrongSection = ('inWrongSection', 'first'),
+                                            dayTA = ('dayTA', 'first')
                                             )
     # If student only clocked in (or out), then In = Out. Fix this by setting out to Nan
     # If df['In'] == df['Out'] is True, assign np.nan, else keep df['Out']
     # wkSummary_df['Out'] = np.where(wkSummary_df['In'] == wkSummary_df['Out'], np.nan, wkSummary_df['Out'])
     # wkSummary_df['Out'] = np.where((wkSummary_df['Out'] - wkSummary_df['In']).dt.total_seconds()/60 < 2.0, pd.NaT, wkSummary_df['Out'])
-    condition = (wkSummary_df['Out'] - wkSummary_df['In']).dt.total_seconds() / 60 >= 2.0
+    condition = (wkSummary_df['Out'] - wkSummary_df['In']).dt.total_seconds() / 60 >= 5.0
     wkSummary_df['Out'] = wkSummary_df['Out'].where(condition, pd.NaT)
     
     # Calculate the time in the lab
     wkSummary_df['hrsInLab'] = (wkSummary_df['Out'] - wkSummary_df['In'])/timedelta(hours = 1)
     
     # Calculate minutes late and tardiness from entry in section 
-    maskAM = wkSummary_df['SectionAttended'].astype(str).str.split().str[1].fillna('') == 'AM'
-    maskPM = wkSummary_df['SectionAttended'].astype(str).str.split().str[1].fillna('') == 'PM'
+    maskAM = wkSummary_df['sectionAttended'].astype(str).str.split().str[1].fillna('') == 'AM'
+    maskPM = wkSummary_df['sectionAttended'].astype(str).str.split().str[1].fillna('') == 'PM'
     wkSummary_df.loc[maskAM, 'tardyTime'] = wkSummary_df['In'] - wkSummary_df['In'].dt.normalize() - timedelta(hours = 8)
     wkSummary_df.loc[maskPM, 'tardyTime'] = wkSummary_df['In'] - wkSummary_df['In'].dt.normalize() - timedelta(hours = 13, minutes = 25)
     wkSummary_df['tardyTime'] = (wkSummary_df['tardyTime'].dt.total_seconds()/60.0).clip(lower = 0)
@@ -123,33 +195,46 @@ def produce_weekly_summary(timesheet_df):
     values = ['P', 'T', 'A']
     wkSummary_df['Attendance'] = np.select(conditions, values, default = 'Unknown')
     
-    summary_df = wkSummary_df.unstack()
-    
-    shortSummary_df = summary_df
+    shortSummary_df = wkSummary_df.unstack()
     cols_to_remove = ['In', 'Out', 'tardy']
     shortSummary_df = shortSummary_df.drop(columns = cols_to_remove)
-    new_order = ['Attendance', 'tardyTime', 'SectionAttended', 'InWrongSection' , 'hrsInLab']
+    new_order = ['Attendance', 'tardyTime', 'sectionAttended', 'InWrongSection' , 'hrsInLab']
     shortSummary_df = shortSummary_df[new_order]
     
-    return summary_df, shortSummary_df
+#     st.markdown('## Weekly Summary')
+#     st.dataframe(wkSummary_df)
+#     st.markdown('## Short Summary')
+#     st.dataframe(shortSummary_df)
+    
+    return wkSummary_df, shortSummary_df
 
-def produce_section_summary(timesheet_df):
-    sectSummary_df = timesheet_df.groupby(['TA','sectionAttended','week','studentName']).agg(
-                                            In = ('Log time', 'min'),
-                                            Out = ('Log time', 'max'),
-                                            ).reset_index()
-    sectSummaryLong_df = pd.melt(sectSummary_df,
-                                    id_vars = ['TA','sectionAttended','week','studentName'],
-                                    value_vars = ['In', 'Out'],
-                                    var_name = 'event_type',
-                                    value_name = 'time')
-    sectSummaryLong_df.sort_values(by='time', inplace = True)
+def produce_section_summary(wkSummary_df):
+
+    temp = wkSummary_df.reset_index()
+    cols_to_remove = ['TA','InWrongSection', 'hrsInLab', 'tardyTime', 'tardy','Attendance']
+    temp.drop(columns = cols_to_remove, inplace = True)
+    
+    new_order = ['dayTA','sectionAttended','week','studentName', 'In', 'Out']
+    temp = temp.reindex(columns = new_order)
+    
+    sectSummaryLong_df = pd.melt(temp,
+                                id_vars = ['dayTA','sectionAttended','week','studentName'],
+                                value_vars = ['In', 'Out'],
+                                var_name = 'event_type',
+                                value_name = 'time')
+
+    sectSummaryLong_df.sort_values(by=['dayTA','sectionAttended','time'], inplace = True)
     sectSummaryLong_df['change'] = 0
     sectSummaryLong_df.loc[sectSummaryLong_df['event_type'] == 'In', 'change'] = 1
     sectSummaryLong_df.loc[sectSummaryLong_df['event_type'] == 'Out', 'change'] = -1
     sectSummaryLong_df['numStudents'] = sectSummaryLong_df['change'].cumsum()
+
     cols_to_drop = ['studentName', 'event_type', 'change']
     sectSummaryLong_df.drop(columns = cols_to_drop, inplace = True)
+
+#     st.markdown('## sectSummaryLong_df')
+#     st.dataframe(sectSummaryLong_df)
+
     return sectSummaryLong_df
     
 def dayOffset(section):
@@ -166,8 +251,14 @@ def dayOffset(section):
         case 'Fri':
             return 4
 
-def prepare_plot(df, TA, section, week):
-    plot_df = df[(df['TA'] == TA) & (df['sectionAttended'] == section) & (df['week'] == week)].reset_index()
+def prepare_plot(df, TA, section, week, enroll_df):
+    plot_df = df[(df['dayTA'] == TA) & (df['sectionAttended'] == section) & (df['week'] == week)].reset_index()
+    
+    # Get enrollment of section
+    result_series = enroll_df.loc[(enroll_df['TA'] == TA) & (enroll_df['sectionAssigned'] == section), 'Count']
+    enrollment = result_series.values[0] if not result_series.empty else 0
+    
+    # Find date, start and end times
     split_week = week.split('/')
     startDate = date(2026, int(split_week[0]), int(split_week[1]) + dayOffset(section))
     if 'AM' in section:
@@ -175,107 +266,163 @@ def prepare_plot(df, TA, section, week):
         endTime = time(11, 00)
     else:
         startTime = time(13, 25)
-        endTime = time(17, 25)
+        endTime = time(16, 25)
     start_dt = datetime.combine(startDate, startTime)
     end_dt = datetime.combine(startDate, endTime)
+    
     title_str = TA + ' ' + section
-    fig = px.line(plot_df,
-                    x = 'time',
-                    y = 'numStudents',
-                    title = title_str
-                    )
-    fig.add_vline(x=start_dt, 
-              line_width=2, line_dash="dash", line_color="red")
-
-    fig.add_vline(x=end_dt, 
-              line_width=2, line_dash="dash", line_color="red")
+    fig = go.Figure()
+    fig.layout.title = title_str
+    
+    x_line = [start_dt, start_dt, end_dt, end_dt]   # Add line for Enrolled
+    y_line = [0, enrollment, enrollment, 0]
+    fig.add_trace(go.Scatter(
+                    x = x_line,
+                    y = y_line,
+                    mode = 'lines',
+                    name = 'Enrolled'
+                    ))
+    
+    fig.add_trace(go.Scatter(                       # Add line for Attended
+                    x = plot_df['time'],
+                    y = plot_df['numStudents'],
+                    mode='lines',
+                    line_shape = 'hv',
+                    name = 'Attended'
+                    ))
+                    
     return fig
     
 def runAnalysis():
-    timesheet_df = read_timesheet()
-    summary_df, shortSummary_df = produce_weekly_summary(timesheet_df)
-    sectSummaryLong_df = produce_section_summary(timesheet_df)
-    shortSummary_df
+    error, timesheet_df, roster_df, enrollment_df = read_timesheet()
+    if error < 0:
+        return
+    wkSummary_df, shortSummary_df = produce_summary(timesheet_df)
+    
+    sectSummaryLong_df = produce_section_summary(wkSummary_df)
     
     attendance_cols = shortSummary_df.columns[shortSummary_df.columns.map(lambda x: x[0]) == 'Attendance']
-    absences = shortSummary_df[attendance_cols].copy()
+    absences_df = shortSummary_df[attendance_cols].copy()
     
-    absences.columns = absences.columns.droplevel(0)
+    absences_df.columns = absences_df.columns.droplevel(0)
     
-    absences['totAbsences'] = absences.isnull().sum(axis=1)
-    
-    mask = absences['totAbsences'] > 1
-    selectedRows = absences[absences['totAbsences'] > 1]
-    
-    st.markdown("## Multiple Absences (A > 1)")    
-    st.dataframe(selectedRows)
-    
+    absences_df['totAbsences'] = absences_df.isnull().sum(axis=1)
+        
     tardyTime_cols = shortSummary_df.columns[shortSummary_df.columns.map(lambda x: x[0]) == 'tardyTime']
-    tardies = shortSummary_df[tardyTime_cols].copy()
+    tardies_df = shortSummary_df[tardyTime_cols].copy()
     
-    tardies.columns = tardies.columns.droplevel(0)
-    
-    mask = tardies > st.session_state['toml_dict']['user']['late_minutes']
-    tardies['totalTardies'] = mask.sum(axis=1)
-    
-    selectedTardyRows = tardies[tardies['totalTardies'] > 1]
-    
-    st.markdown("## Multiple Tardiness (T > 1)")
-    st.dataframe(selectedTardyRows)
-    
+    tardies_df.columns = tardies_df.columns.droplevel(0)
+        
+    enrollment_df = enrollment_df.reset_index()
+#     st.markdown('## Enrollment')
+#     st.dataframe(enrollment_df)
+
 #     st.markdown('## Weekly Summary')
-#     st.dataframe(summary_df)
+#     st.dataframe(wkSummary_df)
     
 #     st.markdown('## Section Summary')
 #     st.dataframe(sectSummaryLong_df)
-    #df_to_plot = sectSummaryLong_df[sectSummaryLong_df['TA'] == 'Cindy' & sectSummaryLong_df['sectionAttended'] == 'Mon PM' & sectSummaryLong_df['week'] == '01/26']
+
+    # Store all dataframes
+    st.session_state['timesheet_df'] = timesheet_df
+    st.session_state['roster_df'] = roster_df
+    st.session_state['shortSummary_df'] = shortSummary_df
+    st.session_state['sectSummaryLong_df'] = sectSummaryLong_df
+    st.session_state['enrollment_df'] = enrollment_df
+    st.session_state['absences_df'] = absences_df
+    st.session_state['tardies_df'] = tardies_df    
+
+def handle_course_change():
+    if st.session_state['selected_course'] != '_none_':
+        st.session_state['timesheetName'] = st.session_state['selected_course']
+        st.session_state['rostersheetName'] = st.session_state['selected_course'] + '_Roster'
+        st.session_state['course_selected'] = True
+        st.session_state['analysis_needs_update'] = True
+
+def handle_plot_week_change():    
+    st.session_state['display_needs_update'] = True
+
+if 'course_selected' not in st.session_state:
+    st.session_state['course_selected'] = False
+if 'analysis_needs_update' not in st.session_state:
+    st.session_state['analysis_needs_update'] = False
+if 'display_needs_update' not in st.session_state:
+    st.session_state['display_needs_update'] = False
+if 'selected_course' not in st.session_state:
+    st.session_state['selected_course'] = '_none_'
+if 'analysis_complete' not in st.session_state:
+    st.session_state['analysis_complete'] = False
+
+
+st.markdown("# Attendance Report")
+utils.read_prefs()
+
+# Make a list of attendance sheets from allowed classes in settings
+processed_list = [
+    f"Chem_{item}" if item.strip().isdigit() else item.strip() 
+    for item in re.split(',\\s*', st.session_state['toml_dict']['user']['allowed_classes'])
+]
+processed_list = ['_none_'] + processed_list
+st.session_state['course_select_list'] = processed_list
+
+st.selectbox(
+    'Course to be analyzed', # Label for the dropdown
+    st.session_state['course_select_list'],                         # The options to display
+    key = 'selected_course',
+    on_change=handle_course_change
+)
+
+if st.session_state['analysis_needs_update']:
+    runAnalysis()
+    st.session_state['analysis_needs_update'] = False
+    st.session_state['display_needs_update'] = True
+
+if st.session_state['display_needs_update']:
+    timesheet_df = st.session_state['timesheet_df']
+    roster_df = st.session_state['roster_df']
+    shortSummary_df = st.session_state['shortSummary_df']
+    sectSummaryLong_df = st.session_state['sectSummaryLong_df']
+    enrollment_df = st.session_state['enrollment_df']
+    absences_df = st.session_state['absences_df']
+    tardies_df = st.session_state['tardies_df']
+
+    st.dataframe(shortSummary_df)
+
+    mask = absences_df['totAbsences'] > 1
+    selectedRows = absences_df[absences_df['totAbsences'] > 1]
     
-    temp_df = timesheet_df.groupby(['TA','sectionAttended']).agg(
+    st.markdown("## Multiple Absences (A > 1)")    
+    st.dataframe(selectedRows)
+
+    mask = tardies_df > st.session_state['toml_dict']['user']['late_minutes']
+    tardies_df['totalTardies'] = mask.sum(axis=1)
+    
+    selectedTardyRows = tardies_df[tardies_df['totalTardies'] > 1]
+    
+    st.markdown("## Multiple Tardiness (T > 1)")
+    st.dataframe(selectedTardyRows)
+
+    st.session_state['plot_week'] = timesheet_df['week'].unique().tolist()
+    
+    st.selectbox(
+        'Week being plotted', # Label for the dropdown
+        st.session_state['plot_week'],                         # The options to display
+        key = 'selected_plot_week',
+        on_change = handle_plot_week_change
+    )
+    
+    temp_df = timesheet_df.groupby(['TA','sectionAssigned']).agg(
                                     Fake = ('studentName', 'first')).reset_index()
     temp_df.drop(columns = ['Fake'], inplace = True)
     sections_list = temp_df.values.tolist()
     
     for row in sections_list:
-        fig = prepare_plot(sectSummaryLong_df, row[0], row[1], '01/26')
+        fig = prepare_plot(sectSummaryLong_df, row[0], row[1], st.session_state['selected_plot_week'], enrollment_df)
         with st.container():
             st.plotly_chart(fig, width ='stretch')
-    
+
     st.markdown("## Processed Raw Data")
     st.dataframe(timesheet_df)
-
-def handle_course_change():
-    st.session_state['timesheetName'] = st.session_state['course_select_box']
-    st.session_state['rostersheetName'] = st.session_state['course_select_box'] + '_Roster'
-    st.session_state['course_selected'] = True
-    st.session_state['needs_update'] = True
-
-if 'course_selected' not in st.session_state:
-    st.session_state['course_selected'] = False
-if 'needs_update' not in st.session_state:
-    st.session_state['needs_update'] = False
-
-st.markdown("# Attendance Report")
-utils.read_prefs()
-
-# Make a list of attendance sheets 
-processed_list = [
-    f"Chem_{item}" if item.strip().isdigit() else item.strip() 
-    for item in re.split(',\\s*', st.session_state['toml_dict']['user']['allowed_classes'])
-]
-st.session_state['course_select_list'] = processed_list
-
-if 'course_select_box' not in st.session_state:
-    st.session_state['course_select_box'] = '_none_'
-    
-selected_option = st.selectbox(
-    'Course to be analyzed', # Label for the dropdown
-    st.session_state['course_select_list'],                         # The options to display
-    key = 'course_select_box',
-    on_change=handle_course_change
-)
-if st.session_state['needs_update']:
-    runAnalysis()
-    st.session_state['needs_update'] = False
 
 utils.shared_sidebar()
 
