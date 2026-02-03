@@ -10,11 +10,27 @@ from oauth2client.service_account import ServiceAccountCredentials
 import time
 
 def read_prefs():
-    filePath = os.path.join(os.path.dirname(__file__), '.streamlit', 'prefs.toml')
-    with open(filePath, 'r') as fp:
-        config = tomlkit.load(fp)
-    
-    st.session_state['toml_dict'] = dict(config)
+
+    # If the prefs file does not exist, make the default file
+    prefs_file_path = Path(__file__).parent / '.streamlit' / 'prefs.toml'
+    prefs_file_path.parent.mkdir(parents=True, exist_ok=True) # Ensure the parent directory exists
+    if not prefs_file_path.is_file():
+        toml_dict = {'user': {
+                        'version': '1.0',
+                        'late_minutes': 5.0,
+                        'start_date': '2026-01-26',
+                        'spreadsheet_name': 'Lab Attendance, Spring 2026',
+                        'allowed_classes': '2070, 2510, Test',
+                        'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: [2026-02-12, 2026-02-13]'
+                        }
+                    }
+        st.session_state['toml_dict'] = toml_dict
+        write_prefs()
+    else:
+        with open(prefs_file_path, 'r') as fp:
+            config = tomlkit.load(fp)
+        
+        st.session_state['toml_dict'] = toml_dict
             
 def write_prefs():
 
@@ -41,7 +57,8 @@ def write_prefs():
     config.add(nl())
     
     # Dump the modified configument to a string
-    with open('.streamlit/prefs.toml', 'w') as fp:
+    prefs_file_path = os.path.join(os.path.dirname(__file__), '.streamlit', 'prefs.toml')
+    with open(prefs_file_path, 'w') as fp:
         fp.write(tomlkit.dumps(config))
     
     st.session_state['file_dirty'] = False

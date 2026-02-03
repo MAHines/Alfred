@@ -58,29 +58,10 @@ def update_skip_days():
     st.session_state['file_dirty'] = True
     
 
+if 'toml_dict' not in st.session_state:
+    utils.read_prefs()
 if 'file_dirty' not in st.session_state:
     st.session_state['file_dirty'] = False
-
-# If the prefs file does not exist, make the default file
-prefs_file_path = Path('.streamlit/prefs.toml')
-prefs_file_path.parent.mkdir(parents=True, exist_ok=True) # Ensure the parent directory exists
-if not prefs_file_path.is_file():
-    toml_dict = {'user': {
-                    'version': '1.0',
-                    'late_minutes': 5.0,
-                    'start_date': '2026-01-26',
-                    'spreadsheet_name': 'Lab Attendance, Spring 2026',
-                    'allowed_classes': '2070, 2510, Test',
-                    'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: [2026-02-12, 2026-02-13]'
-                    }
-                }
-    st.session_state['toml_dict'] = toml_dict
-    utils.write_prefs()
-    
-# Read the prefs file and store values
-if 'prefs_initiated' not in st.session_state:
-    utils.read_prefs()
-    st.session_state['prefs_initiated'] = True
 
 st.markdown("# Alfred Settings")
 utils.shared_sidebar()

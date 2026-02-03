@@ -352,10 +352,11 @@ if 'selected_course' not in st.session_state:
     st.session_state['selected_course'] = '_none_'
 if 'analysis_complete' not in st.session_state:
     st.session_state['analysis_complete'] = False
+if 'toml_dict' not in st.session_state:
+    utils.read_prefs()
 
 
 st.markdown("# Attendance Report")
-utils.read_prefs()
 
 # Make a list of attendance sheets from allowed classes in settings
 processed_list = [
