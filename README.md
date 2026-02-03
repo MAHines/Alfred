@@ -4,6 +4,12 @@
 
 This module reads the attendance data stored in a private Google sheet and prepares an attendance report.
 
+## Analyze Grades
+
+This module is primarily designed to analyze grading in a folder of Gradescope scores for an assignment. To get the folder, open the assignment in Gradescope and select "Export Evaluations" at the bottom of the page.
+
+Drag the folder onto "Drag and drop files here." Give the analysis a name in the modal dialog. An analysis of all problems will appear. To analyze a single problem, use the dropdown menu in the sidebar to select it.
+
 ## Settings
 
 This module handles the settings for the various modules. The data are stored in Alfred/.streamlit/prefs.toml. The file can also be edited with a text editor.

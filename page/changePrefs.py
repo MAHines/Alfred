@@ -71,7 +71,7 @@ if not prefs_file_path.is_file():
                     'start_date': '2026-01-26',
                     'spreadsheet_name': 'Lab Attendance, Spring 2026',
                     'allowed_classes': '2070, 2510, Test',
-                    'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: []'
+                    'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: [2026-02-12, 2026-02-13]'
                     }
                 }
     st.session_state['toml_dict'] = toml_dict

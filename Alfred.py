@@ -6,10 +6,13 @@ import time
 st.set_page_config(layout='wide')
 
 def Home():
-    with st.container(horizontal_alignment="center"): #
+    # Create three columns and put content in the middle one
+    left, mid, right = st.columns([1, 2, 1])
+    
+    with mid: #
         image_path = os.path.join(os.path.dirname(__file__), 'assets', 'Alfred.png')
         st.image(image_path, caption=f"{time.time()}", width=250)
-    st.html('<div style="text-align: center;font-size: 44px;font-weight: bold">Welcome to Alfred </div>')
+        st.html('<div style="font-size: 44px;font-weight: bold">Welcome to Alfred </div>')
     utils.shared_sidebar()
 
 
