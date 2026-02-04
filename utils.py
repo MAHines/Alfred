@@ -30,7 +30,7 @@ def read_prefs():
         with open(prefs_file_path, 'r') as fp:
             config = tomlkit.load(fp)
         
-        st.session_state['toml_dict'] = toml_dict
+        st.session_state['toml_dict'] = config
             
 def write_prefs():
 
