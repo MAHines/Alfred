@@ -8,6 +8,7 @@ import gspread
 from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 import time
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 def read_prefs():
 
@@ -63,17 +64,26 @@ def write_prefs():
     
     st.session_state['file_dirty'] = False
 
-def open_google_sheet():
+@retry(
+    stop=stop_after_attempt(5), # Stop after a maximum of 5 attempts
+    wait=wait_fixed(1) 
+)
+def read_google_sheet_with_retry(sheetName, msg):   # Open Sheet, then read entire sheet with sheetName
     
-    # Tried to catch gspread exceptions due to bad wifi, but could not do it gracefully
-    # Bad wifi just makes the whole interface hang
+    message = f'Reading {msg} Google sheet'
+    alert = st.warning(message)
     scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
              "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
     google_service_account_info = st.secrets['google_service_account']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(google_service_account_info, scope)
     client = gspread.authorize(creds)
-    return client.open(st.session_state['toml_dict']['user']['spreadsheet_name'])
-
+    sh = client.open(st.session_state['toml_dict']['user']['spreadsheet_name'])
+    
+    # Open the appropriate sheet and read it
+    data = sh.worksheet(sheetName).get_all_values()
+    alert.empty()
+    return data
+    
 def check_if_sheet_exists(sheet_title):
     """
     Checks if a worksheet with the given title exists in the spreadsheet.

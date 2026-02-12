@@ -15,11 +15,17 @@ import plotly.graph_objects as go
 
 def read_timesheet():
 
-    sh = utils.open_google_sheet()  # Actual code in utils
-    
-    # Open the appropriate sheet and read the timesheet
-    st.session_state['timesheet'] = sh.worksheet(st.session_state['timesheetName'])
-    data = st.session_state['timesheet'].get_all_values()
+#     sh = utils.open_google_sheet()  # Actual code in utils
+#     
+#     # Open the appropriate sheet and read the timesheet
+#     st.session_state['timesheet'] = sh.worksheet(st.session_state['timesheetName'])
+#     data = st.session_state['timesheet'].get_all_values()
+    try:
+        data = utils.read_google_sheet_with_retry(st.session_state['timesheetName'], 'attendance')
+    except Exception as e:
+        st.error(f'Failed after retries (likely wifi issue): {e}')
+        return(-1, None, None, None)
+        
     timesheet_df = pd.DataFrame(data, columns = ['course','TA', 'section','ID','Log time']) # We do not use the course and section columns
     columns_to_drop = ['course', 'section']
     timesheet_df.drop(columns = columns_to_drop, inplace = True)
@@ -45,7 +51,7 @@ def read_timesheet():
     mask = timesheet_df['Log time'].dt.date.isin(target_dates)   # Mask of df containing adv dates
     timesheet_df.loc[mask, 'Log time'] -= pd.offsets.DateOffset(weeks = 1)    # Here is where we fake the dates by subtracting a week
 
-    error, roster_df = read_roster_sheet(sh)
+    error, roster_df = read_roster_sheet()
     if error < 0:
         return -1, roster_df
     
@@ -124,6 +130,8 @@ def read_timesheet():
     roster_df.drop_duplicates(inplace = True)
     roster_df['netID'] = roster_df['ID'].map(mapSeries_ID_to_netID)
     roster_df = roster_df[['studentName', 'ID','netID','TA', 'sectionAssigned']]
+    roster_df = roster_df.set_index('studentName', drop = True)
+    roster_df = roster_df.sort_index(ascending=True)
 
     # Reorder columns
     first_5_cols = ['studentName', 'TA', 'sectionAttended','inWrongSection']
@@ -142,11 +150,17 @@ def read_timesheet():
 def find_most_common(row):
     return row.mode()[0]
 
-def read_roster_sheet(sh):
+def read_roster_sheet():
 
     # Now open the sheet for the roster and read
-    st.session_state['rostersheet'] = sh.worksheet(st.session_state['rostersheetName'])
-    data = st.session_state['rostersheet'].get_all_values()
+#     st.session_state['rostersheet'] = sh.worksheet(st.session_state['rostersheetName'])
+#     data = st.session_state['rostersheet'].get_all_values()
+    try:
+        data = utils.read_google_sheet_with_retry(st.session_state['rostersheetName'], 'roster')
+    except Exception as e:
+        st.error(f'Failed after retries (likely wifi issue):: {e}')
+        return -1, None
+    
     headers = data.pop(0)
     roster_df = pd.DataFrame(data, columns = headers)
     roster_df.drop_duplicates(inplace = True)
@@ -325,7 +339,7 @@ def prepare_plot(df, TA, section, week, enroll_df):
 def runAnalysis():
     error, timesheet_df, roster_df, enrollment_df = read_timesheet()
     if error < 0:
-        return
+        return error
     st.session_state['timesheet_df'] = timesheet_df
     st.session_state['roster_df'] = roster_df
     enrollment_df = enrollment_df.reset_index()
@@ -352,7 +366,9 @@ def runAnalysis():
     tardies_df['totalTardies'] = mask.sum(axis=1)
 
     st.session_state['absences_df'] = absences_df
-    st.session_state['tardies_df'] = tardies_df    
+    st.session_state['tardies_df'] = tardies_df   
+    
+    return 0 
         
 #     st.markdown('## Enrollment')
 #     st.dataframe(enrollment_df)
@@ -365,28 +381,21 @@ def runAnalysis():
 
 
 def handle_course_change():
-    if st.session_state['selected_course'] != '_none_':
-        st.session_state['timesheetName'] = st.session_state['selected_course']
-        st.session_state['rostersheetName'] = st.session_state['selected_course'] + '_Roster'
-        st.session_state['course_selected'] = True
-        st.session_state['analysis_needs_update'] = True
+    st.session_state['timesheetName'] = st.session_state['selected_course']
+    st.session_state['rostersheetName'] = st.session_state['selected_course'] + '_Roster'
+    st.session_state['analysis_needs_update'] = True
 
 def handle_plot_week_change():    
     st.session_state['display_needs_update'] = True
 
-if 'course_selected' not in st.session_state:
-    st.session_state['course_selected'] = False
 if 'analysis_needs_update' not in st.session_state:
     st.session_state['analysis_needs_update'] = False
 if 'display_needs_update' not in st.session_state:
     st.session_state['display_needs_update'] = False
-if 'selected_course' not in st.session_state:
-    st.session_state['selected_course'] = '_none_'
 if 'analysis_complete' not in st.session_state:
     st.session_state['analysis_complete'] = False
 if 'toml_dict' not in st.session_state:
     utils.read_prefs()
-
 
 st.markdown("# Attendance Report")
 
@@ -395,20 +404,22 @@ processed_list = [
     f"Chem_{item}" if item.strip().isdigit() else item.strip() 
     for item in re.split(',\\s*', st.session_state['toml_dict']['user']['allowed_classes'])
 ]
-processed_list = ['_none_'] + processed_list
 st.session_state['course_select_list'] = processed_list
 
 st.selectbox(
     'Course to be analyzed', # Label for the dropdown
     st.session_state['course_select_list'],                         # The options to display
+    index = None,
+    placeholder = 'Select a course…',
     key = 'selected_course',
     on_change=handle_course_change
 )
 
 if st.session_state['analysis_needs_update']:
-    runAnalysis()
-    st.session_state['analysis_needs_update'] = False
-    st.session_state['display_needs_update'] = True
+    error = runAnalysis()
+    if error == 0:
+        st.session_state['analysis_needs_update'] = False
+        st.session_state['display_needs_update'] = True
 
 if st.session_state['display_needs_update']:
     timesheet_df = st.session_state['timesheet_df']
@@ -421,12 +432,24 @@ if st.session_state['display_needs_update']:
 
     st.dataframe(shortSummary_df)
     
+    # Download buttons here. Create two columns, side-by-side
+    col1, col2 = st.columns(2)
+
     shortSummary_data = shortSummary_df.to_csv(index = True, header = True).encode('utf-8')
-    st.download_button(label = 'Download as csv',
-                        data = shortSummary_data,
-                        file_name = 'Attendance.csv',
-                        mime = 'text/csv',
-                        type = 'primary')
+    with col1:
+        st.download_button(label = 'Download Attendance',
+                            data = shortSummary_data,
+                            file_name = 'Attendance.csv',
+                            mime = 'text/csv',
+                            type = 'primary')
+                        
+    roster_data = roster_df.to_csv(index = True, header = True).encode('utf-8')
+    with col2:
+        st.download_button(label = 'Download Roster',
+                            data = roster_data,
+                            file_name = 'Roster.csv',
+                            mime = 'text/csv',
+                            type = 'primary')    
 
     mask = absences_df['totAbsences'] > 1
     selectedRows = absences_df[absences_df['totAbsences'] > 1]
@@ -444,16 +467,16 @@ if st.session_state['display_needs_update']:
     
     # Select the default week to plot. We would like this to be the last complete week
     default_week = 0
-    if len(st.session_state['plot_week']) > 1:
-        # Initially select last complete week. Find this by looking at counts of 'P' and 'T'
-        thisWeek = ('Attendance', st.session_state['plot_week'][0])
-        lastWeek = ('Attendance', st.session_state['plot_week'][1])
-        
-        thisWeek_count = shortSummary_df[thisWeek].value_counts()['P'] + shortSummary_df[thisWeek].value_counts()['T']
-        lastWeek_count = shortSummary_df[lastWeek].value_counts()['P'] + shortSummary_df[lastWeek].value_counts()['T']
-        
-        if(thisWeek_count < 0.90 * lastWeek_count):
-            default_week = 1
+#     if len(st.session_state['plot_week']) > 1:
+#         # Initially select last complete week. Find this by looking at counts of 'P' and 'T'
+#         thisWeek = ('Attendance', st.session_state['plot_week'][0])
+#         lastWeek = ('Attendance', st.session_state['plot_week'][1])
+#         
+#         thisWeek_count = shortSummary_df[thisWeek].value_counts()['P'] + shortSummary_df[thisWeek].value_counts()['T']
+#         lastWeek_count = shortSummary_df[lastWeek].value_counts()['P'] + shortSummary_df[lastWeek].value_counts()['T']
+#         
+#         if(thisWeek_count < 0.90 * lastWeek_count):
+#             default_week = 1
 
     if 'selected_plot_week' not in st.session_state:
         st.session_state['selected_plot_week'] = st.session_state['plot_week'][default_week]
@@ -476,6 +499,8 @@ if st.session_state['display_needs_update']:
 
     st.markdown("## Processed Raw Data")
     st.dataframe(timesheet_df)
+    
+    st.session_state['display_needs_update'] = False
 
 utils.shared_sidebar()
 
