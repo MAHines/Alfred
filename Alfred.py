@@ -23,6 +23,7 @@ pg = st.navigation({
     "Scripts": [
         st.Page('page/analyzeAttendance.py', title='Analyze Attendance'),
         st.Page('page/analyzeGradescopeFolder.py', title='Analyze Grades'),
+        st.Page('page/updateRoster.py', title='Update Roster'),
         st.Page('page/changePrefs.py', title='Settings'),
     ]
 })

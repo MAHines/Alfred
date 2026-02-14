@@ -51,7 +51,7 @@ def read_timesheet():
     mask = timesheet_df['Log time'].dt.date.isin(target_dates)   # Mask of df containing adv dates
     timesheet_df.loc[mask, 'Log time'] -= pd.offsets.DateOffset(weeks = 1)    # Here is where we fake the dates by subtracting a week
 
-    error, roster_df = read_roster_sheet()
+    error, roster_df = utils.read_roster_sheet()
     if error < 0:
         return -1, roster_df
     
@@ -149,32 +149,6 @@ def read_timesheet():
 
 def find_most_common(row):
     return row.mode()[0]
-
-def read_roster_sheet():
-
-    # Now open the sheet for the roster and read
-#     st.session_state['rostersheet'] = sh.worksheet(st.session_state['rostersheetName'])
-#     data = st.session_state['rostersheet'].get_all_values()
-    try:
-        data = utils.read_google_sheet_with_retry(st.session_state['rostersheetName'], 'roster')
-    except Exception as e:
-        st.error(f'Failed after retries (likely wifi issue):: {e}')
-        return -1, None
-    
-    headers = data.pop(0)
-    roster_df = pd.DataFrame(data, columns = headers)
-    roster_df.drop_duplicates(inplace = True)
-    
-    # We want to make sure each student is only entered once
-    duplicate_mask = roster_df.duplicated(subset=['ID'], keep=False)
-    duplicate_rows = roster_df[duplicate_mask]
-    
-    if len(duplicate_rows) > 0:
-        st.write(f'There are {int(len(duplicate_rows)/2)} students in multiple sections. This must be fixed before proceeding')
-        st.dataframe(duplicate_rows)
-        return -1, duplicate_rows
-    
-    return 0, roster_df
 
 def produce_summary(timesheet_df):
     wkSummary_df = timesheet_df.groupby(['studentName', 'ID','TA','week'], dropna=False).agg( 
@@ -382,7 +356,7 @@ def runAnalysis():
 
 def handle_course_change():
     st.session_state['timesheetName'] = st.session_state['selected_course']
-    st.session_state['rostersheetName'] = st.session_state['selected_course'] + '_Roster'
+    st.session_state['rosterSheetName'] = st.session_state['selected_course'] + '_Roster'
     st.session_state['analysis_needs_update'] = True
 
 def handle_plot_week_change():    

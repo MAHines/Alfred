@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 import tomlkit
 import os
 from tomlkit import comment, document, nl, table
@@ -84,6 +85,47 @@ def read_google_sheet_with_retry(sheetName, msg):   # Open Sheet, then read enti
     alert.empty()
     return data
     
+def read_roster_sheet():
+
+    # Now open the sheet for the roster and read
+    try:
+        data = read_google_sheet_with_retry(st.session_state['rosterSheetName'], 'roster')
+    except Exception as e:
+        st.error(f'Failed after retries (likely wifi issue):: {e}')
+        return -1, None
+    
+    headers = data.pop(0)
+    roster_df = pd.DataFrame(data, columns = headers)
+    roster_df.drop_duplicates(inplace = True)
+    
+    # We want to make sure each student is only entered once
+    duplicate_mask = roster_df.duplicated(subset=['ID'], keep=False)
+    duplicate_rows = roster_df[duplicate_mask]
+    
+    if len(duplicate_rows) > 0:
+        st.write(f'There are {int(len(duplicate_rows)/2)} students in multiple sections. This must be fixed before proceeding')
+        st.dataframe(duplicate_rows)
+        return -1, duplicate_rows
+    
+    return 0, roster_df
+
+@retry(
+    stop=stop_after_attempt(5), # Stop after a maximum of 5 attempts
+    wait=wait_fixed(1) 
+)
+def append_row_to_google_sheet(spreadsheet_name, spreadsheet_entry):
+    
+    alert = st.warning('Writing to Alfred Google sheet')
+    scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
+             "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+    google_service_account_info = st.secrets['google_service_account']
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(google_service_account_info, scope)
+    client = gspread.authorize(creds)
+    sh = client.open(st.session_state['toml_dict']['user']['spreadsheet_name'])
+    sheetName = sh.worksheet(spreadsheet_name)    
+    sheetName.append_row(spreadsheet_entry) # Actual spreadsheet entry
+    alert.empty()
+
 def check_if_sheet_exists(sheet_title):
     """
     Checks if a worksheet with the given title exists in the spreadsheet.
