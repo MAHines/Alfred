@@ -15,11 +15,6 @@ import plotly.graph_objects as go
 
 def read_timesheet():
 
-#     sh = utils.open_google_sheet()  # Actual code in utils
-#     
-#     # Open the appropriate sheet and read the timesheet
-#     st.session_state['timesheet'] = sh.worksheet(st.session_state['timesheetName'])
-#     data = st.session_state['timesheet'].get_all_values()
     try:
         data = utils.read_google_sheet_with_retry(st.session_state['timesheetName'], 'attendance')
     except Exception as e:
@@ -71,6 +66,8 @@ def read_timesheet():
     timesheet_df['existsID'] = timesheet_df['actualID'].isin(roster_df['ID'])
     
     # Now remove any rows where 'existsID' is False
+    unknown_df = timesheet_df[~timesheet_df['existsID']]
+    st.session_state['unknown_df'] = unknown_df
     timesheet_df = timesheet_df[timesheet_df['existsID']]
     
     # Find assigned sections
@@ -441,16 +438,6 @@ if st.session_state['display_needs_update']:
     
     # Select the default week to plot. We would like this to be the last complete week
     default_week = 0
-#     if len(st.session_state['plot_week']) > 1:
-#         # Initially select last complete week. Find this by looking at counts of 'P' and 'T'
-#         thisWeek = ('Attendance', st.session_state['plot_week'][0])
-#         lastWeek = ('Attendance', st.session_state['plot_week'][1])
-#         
-#         thisWeek_count = shortSummary_df[thisWeek].value_counts()['P'] + shortSummary_df[thisWeek].value_counts()['T']
-#         lastWeek_count = shortSummary_df[lastWeek].value_counts()['P'] + shortSummary_df[lastWeek].value_counts()['T']
-#         
-#         if(thisWeek_count < 0.90 * lastWeek_count):
-#             default_week = 1
 
     if 'selected_plot_week' not in st.session_state:
         st.session_state['selected_plot_week'] = st.session_state['plot_week'][default_week]
@@ -473,6 +460,9 @@ if st.session_state['display_needs_update']:
 
     st.markdown("## Processed Raw Data")
     st.dataframe(timesheet_df)
+    
+    st.markdown('## Unknown entries')
+    st.dataframe(st.session_state['unknown_df'])
     
     st.session_state['display_needs_update'] = False
 
