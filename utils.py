@@ -9,6 +9,7 @@ import gspread
 from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 import time
+import re
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 def read_prefs():
@@ -95,19 +96,19 @@ def read_roster_sheet():
         return -1, None
     
     headers = data.pop(0)
-    roster_df = pd.DataFrame(data, columns = headers)
-    roster_df.drop_duplicates(inplace = True)
+    readRoster_df = pd.DataFrame(data, columns = headers)
+    readRoster_df.drop_duplicates(inplace = True)
     
     # We want to make sure each student is only entered once
-    duplicate_mask = roster_df.duplicated(subset=['ID'], keep=False)
-    duplicate_rows = roster_df[duplicate_mask]
+    duplicate_mask = readRoster_df.duplicated(subset=['ID'], keep=False)
+    duplicate_rows = readRoster_df[duplicate_mask]
     
     if len(duplicate_rows) > 0:
         st.write(f'There are {int(len(duplicate_rows)/2)} students in multiple sections. This must be fixed before proceeding')
         st.dataframe(duplicate_rows)
         return -1, duplicate_rows
     
-    return 0, roster_df
+    return 0, readRoster_df
 
 @retry(
     stop=stop_after_attempt(5), # Stop after a maximum of 5 attempts
@@ -150,6 +151,17 @@ def check_if_sheet_exists(sheet_title):
         # print(f"An error occurred: {e}")
         return False
 
+def init_course_select_list(): # Initiates st.session_state['course_select_list'] and st.session_state['last_selected_course']
+    # Set up logic for course selection list
+    if 'course_select_list' not in st.session_state:
+        # Make a list of attendance sheets from allowed classes in settings
+        processed_list = ['None selected'] + [
+            f"Chem_{item}" if item.strip().isdigit() else item.strip() 
+            for item in re.split(',\\s*', st.session_state['toml_dict']['user']['allowed_classes'])
+        ]
+        st.session_state['course_select_list'] = processed_list
+    if 'last_selected_course' not in st.session_state:
+        st.session_state['last_selected_course'] = st.session_state['course_select_list'][0]
     
 def shared_sidebar():
     image_path = os.path.join(os.path.dirname(__file__), 'assets', 'Hobbes_glasses.png')

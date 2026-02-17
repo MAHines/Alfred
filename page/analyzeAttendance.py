@@ -1,3 +1,9 @@
+# The purpose of this script is to calculate student attendance from the in/out timesheet in
+#   a shared Google sheet. The script also requires the class roster, again from the shared
+#   Google sheet to translate netIDs to CUIDs. The script produces a calculated roster (calcRoster_df)
+#   which is based on actual student attendance patterns (i.e., which section a student actually
+#   attends.
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -12,8 +18,15 @@ import ast
 import plotly.express as px
 import plotly.graph_objects as go
 
-
 def read_timesheet():
+    """ Read the in/out timesheet from the shared Google doc. Produce timesheet_df, calcRoster_df, and enrollment_df.
+    
+        calcRoster_df: studentName, ID, netID, TA, and sectionAssigned
+        enrollment_df: TA, sectionAssigned, Count
+        timesheet_df: studentName, TA, sectionAttended, inWrongSection, dayTA, enteredID, Log time, ID, sectionAssigned, weekNum, week
+        
+        TA = assigned TA; dayTA = the TA in the section attended on a particular day
+         """
 
     try:
         data = utils.read_google_sheet_with_retry(st.session_state['timesheetName'], 'attendance')
@@ -46,15 +59,15 @@ def read_timesheet():
     mask = timesheet_df['Log time'].dt.date.isin(target_dates)   # Mask of df containing adv dates
     timesheet_df.loc[mask, 'Log time'] -= pd.offsets.DateOffset(weeks = 1)    # Here is where we fake the dates by subtracting a week
 
-    error, roster_df = utils.read_roster_sheet()
+    error, readRoster_df = utils.read_roster_sheet()
     if error < 0:
-        return -1, roster_df
+        return -1, readRoster_df
     
-    # Convert the roster into a mapping series for netID -> ID
-    mapSeries_netID_to_ID = roster_df.set_index('netID')['ID']
-    mapSeries_ID_to_netID = roster_df.set_index('ID')['netID']
-    mapSeries_ID_to_section = roster_df.set_index('ID')['section']
-    mapSeries_ID_to_name = roster_df.set_index('ID')['studentName']
+    # Convert the readRoster into a mapping series for netID -> ID
+    mapSeries_netID_to_ID = readRoster_df.set_index('netID')['ID']
+    mapSeries_ID_to_netID = readRoster_df.set_index('ID')['netID']
+    mapSeries_ID_to_section = readRoster_df.set_index('ID')['section']
+    mapSeries_ID_to_name = readRoster_df.set_index('ID')['studentName']
     
     # Calculate sectionAttended from entry time 
     timesheet_df['sectionAttended'] = timesheet_df['Log time'].dt.strftime('%a') + ' ' + timesheet_df['Log time'].dt.strftime('%p')
@@ -63,7 +76,7 @@ def read_timesheet():
     timesheet_df['actualID'] = timesheet_df['enteredID']    # What if wrong ID?
     mask = timesheet_df['actualID'].isin(mapSeries_netID_to_ID.index)
     timesheet_df.loc[mask, 'actualID'] = timesheet_df.loc[mask, 'actualID'].map(mapSeries_netID_to_ID)
-    timesheet_df['existsID'] = timesheet_df['actualID'].isin(roster_df['ID'])
+    timesheet_df['existsID'] = timesheet_df['actualID'].isin(readRoster_df['ID'])
     
     # Now remove any rows where 'existsID' is False
     unknown_df = timesheet_df[~timesheet_df['existsID']]
@@ -123,12 +136,12 @@ def read_timesheet():
                                        
     # At this stage, calcRoster_df does not contain any students who have not attended their correct section at least once
     #   so we need to recalculate
-    roster_df = timesheet_df[['studentName', 'ID','TA', 'sectionAssigned']].copy()
-    roster_df.drop_duplicates(inplace = True)
-    roster_df['netID'] = roster_df['ID'].map(mapSeries_ID_to_netID)
-    roster_df = roster_df[['studentName', 'ID','netID','TA', 'sectionAssigned']]
-    roster_df = roster_df.set_index('studentName', drop = True)
-    roster_df = roster_df.sort_index(ascending=True)
+    calcRoster_df = timesheet_df[['studentName', 'ID','TA', 'sectionAssigned']].copy()
+    calcRoster_df.drop_duplicates(inplace = True)
+    calcRoster_df['netID'] = calcRoster_df['ID'].map(mapSeries_ID_to_netID)
+    calcRoster_df = calcRoster_df[['studentName', 'ID','netID','TA', 'sectionAssigned']]
+    calcRoster_df = calcRoster_df.set_index('studentName', drop = True)
+    calcRoster_df = calcRoster_df.sort_index(ascending=True)
 
     # Reorder columns
     first_5_cols = ['studentName', 'TA', 'sectionAttended','inWrongSection']
@@ -138,16 +151,28 @@ def read_timesheet():
     timesheet_df = timesheet_df[new_col_order]
     
 #     st.markdown('## Roster & Timesheet_df')
-#     st.dataframe(roster_df)
-#    st.dataframe(enrollment_df)
+#     st.dataframe(calcRoster_df)
+#     st.dataframe(enrollment_df)
 #     st.dataframe(timesheet_df)
    
-    return 0, timesheet_df, roster_df, enrollment_df
+    return 0, timesheet_df, calcRoster_df, enrollment_df
 
 def find_most_common(row):
     return row.mode()[0]
 
 def produce_summary(timesheet_df):
+    """ Summarizes the data in timesheet_df, which was produced by readTimesheet()
+    
+        weeklySummary_df summarizes each student's activity in a particular week. There is
+            one row of data for every week attended
+        weeklySummary_df: studentName, ID, TA, week, In, Out, sectionAssigned, InWrongSection, dayTA,
+            hrsInLab, tardyTime, tardy, Attendance
+        
+        shortSummary_df is the actual dataframe shown to the user. Each row summarizes the attendance
+            history of one student.
+        shortSummary_df: (indices) studentName, TA
+                         (MultiIndex by week) Attendance, tardyTime, sectionAttended, InWrongSection, hrsInLab 
+         """
     wkSummary_df = timesheet_df.groupby(['studentName', 'ID','TA','week'], dropna=False).agg( 
                                             In = ('Log time', 'min'),
                                             Out = ('Log time', 'max'),
@@ -190,12 +215,12 @@ def produce_summary(timesheet_df):
         
     # Look up each student's assigned section
     shortSummary_df['ID'] = shortSummary_df.index.get_level_values(1)   # Kludge to get ID from index
-    roster_df = st.session_state['roster_df']
-    mapSeries_ID_to_section = roster_df.set_index('ID')['sectionAssigned']
+    calcRoster_df = st.session_state['calcRoster_df']
+    mapSeries_ID_to_section = calcRoster_df.set_index('ID')['sectionAssigned']
     shortSummary_df['sect'] = shortSummary_df['ID'].map(mapSeries_ID_to_section)
     
     # Make a list of all of the sections from this week that have finished
-    sections = roster_df['sectionAssigned'].unique().tolist()
+    sections = calcRoster_df['sectionAssigned'].unique().tolist()
     currentTime = datetime.now()
     pastSections = [s for s in sections if sectionDateTimes(s, thisWeek, 3) < currentTime]
         
@@ -219,6 +244,11 @@ def produce_summary(timesheet_df):
     return wkSummary_df, shortSummary_df
 
 def produce_section_summary(wkSummary_df):
+    """ Produces sectSummaryLong_df which summarizes the weekly attendance in each section
+    
+        sectSummaryLong_df: dayTA, sectionAttended, week, time, numStudents
+        time appears to be the time at which the first student swiped in
+    """
 
     temp = wkSummary_df.reset_index()
     cols_to_remove = ['TA','InWrongSection', 'hrsInLab', 'tardyTime', 'tardy','Attendance']
@@ -275,6 +305,8 @@ def sectionDateTimes(section, week, addHrs):
     return the_dt
 
 def prepare_plot(df, TA, section, week, enroll_df):
+    
+    """ Produces a plot of students vs time for a specific section """
     plot_df = df[(df['dayTA'] == TA) & (df['sectionAttended'] == section) & (df['week'] == week)].reset_index()
     
     # Get enrollment of section
@@ -308,11 +340,12 @@ def prepare_plot(df, TA, section, week, enroll_df):
     return fig
     
 def runAnalysis():
-    error, timesheet_df, roster_df, enrollment_df = read_timesheet()
+    """ Performs the actual analysis of the timesheet """
+    error, timesheet_df, calcRoster_df, enrollment_df = read_timesheet()
     if error < 0:
         return error
     st.session_state['timesheet_df'] = timesheet_df
-    st.session_state['roster_df'] = roster_df
+    st.session_state['calcRoster_df'] = calcRoster_df
     enrollment_df = enrollment_df.reset_index()
     st.session_state['enrollment_df'] = enrollment_df
 
@@ -350,39 +383,47 @@ def runAnalysis():
 #     st.markdown('## Section Summary')
 #     st.dataframe(sectSummaryLong_df)
 
-
 def handle_course_change():
-    st.session_state['timesheetName'] = st.session_state['selected_course']
-    st.session_state['rosterSheetName'] = st.session_state['selected_course'] + '_Roster'
-    st.session_state['analysis_needs_update'] = True
+    if st.session_state['selected_course'] == 'None selected':
+        st.write('st.session_state[selected_course] == None selected called unexpectedly')
+        st.session_state['analysis_needs_update'] = False
+        st.session_state['display_ready'] = False
+        st.session_state['attendance_title_str'] = '# Attendance Report'
+    elif st.session_state['selected_course'] == st.session_state['last_selected_course']:
+        st.session_state['analysis_needs_update'] = False
+    else:    
+        st.session_state['timesheetName'] = st.session_state['selected_course']
+        st.session_state['rosterSheetName'] = st.session_state['selected_course'] + '_Roster'
+        st.session_state['analysis_needs_update'] = True
+    st.session_state['last_selected_course'] = st.session_state['selected_course']
+    st.session_state['selected_course'] = 'None selected'
 
-def handle_plot_week_change():    
-    st.session_state['display_needs_update'] = True
+def update_attendance_title_str():
+    st.session_state['attendance_title_str'] = '# ' + st.session_state['cur_analyzed_course'].replace("_", " ") + ' Attendance Report'
+    attendTitleContainer.write(st.session_state['attendance_title_str'])
 
+# Initialization
 if 'analysis_needs_update' not in st.session_state:
     st.session_state['analysis_needs_update'] = False
-if 'display_needs_update' not in st.session_state:
-    st.session_state['display_needs_update'] = False
+if 'display_ready' not in st.session_state:
+    st.session_state['display_ready'] = False
 if 'analysis_complete' not in st.session_state:
     st.session_state['analysis_complete'] = False
 if 'toml_dict' not in st.session_state:
     utils.read_prefs()
+if 'cur_analyzed_course' not in st.session_state:
+    st.session_state['cur_analyzed_course'] = ''
+if 'attendance_title_str' not in st.session_state:
+    st.session_state['attendance_title_str'] = '# Attendance Report'
+    
+utils.init_course_select_list()  # Initiates st.session_state['course_select_list']
 
-st.markdown("# Attendance Report")
-
-# Make a list of attendance sheets from allowed classes in settings
-processed_list = [
-    f"Chem_{item}" if item.strip().isdigit() else item.strip() 
-    for item in re.split(',\\s*', st.session_state['toml_dict']['user']['allowed_classes'])
-]
-st.session_state['course_select_list'] = processed_list
-
+attendTitleContainer = st.container(border = False)
+    
 st.selectbox(
-    'Course to be analyzed', # Label for the dropdown
+    'New course to be analyzed', # Label for the dropdown
     st.session_state['course_select_list'],                         # The options to display
-    index = None,
-    placeholder = 'Select a course…',
-    key = 'selected_course',
+    key = 'selected_course',                # Always start at none selected
     on_change=handle_course_change
 )
 
@@ -390,11 +431,13 @@ if st.session_state['analysis_needs_update']:
     error = runAnalysis()
     if error == 0:
         st.session_state['analysis_needs_update'] = False
-        st.session_state['display_needs_update'] = True
+        st.session_state['display_ready'] = True
+        st.session_state['cur_analyzed_course'] = st.session_state['timesheetName']
 
-if st.session_state['display_needs_update']:
+# Does the actual display if the data are ready for display
+if st.session_state['display_ready']:
     timesheet_df = st.session_state['timesheet_df']
-    roster_df = st.session_state['roster_df']
+    calcRoster_df = st.session_state['calcRoster_df']
     shortSummary_df = st.session_state['shortSummary_df']
     sectSummaryLong_df = st.session_state['sectSummaryLong_df']
     enrollment_df = st.session_state['enrollment_df']
@@ -414,7 +457,7 @@ if st.session_state['display_needs_update']:
                             mime = 'text/csv',
                             type = 'primary')
                         
-    roster_data = roster_df.to_csv(index = True, header = True).encode('utf-8')
+    roster_data = calcRoster_df.to_csv(index = True, header = True).encode('utf-8')
     with col2:
         st.download_button(label = 'Download Roster',
                             data = roster_data,
@@ -444,8 +487,8 @@ if st.session_state['display_needs_update']:
     st.selectbox(
         'Week being plotted', # Label for the dropdown
         st.session_state['plot_week'],                         # The options to display
-        key = 'selected_plot_week',
-        on_change = handle_plot_week_change
+        key = 'selected_plot_week'#,
+        #on_change = handle_plot_week_change
     )
     
     temp_df = timesheet_df.groupby(['TA','sectionAssigned']).agg(
@@ -463,9 +506,8 @@ if st.session_state['display_needs_update']:
     
     st.markdown('## Unknown entries')
     st.dataframe(st.session_state['unknown_df'])
-    
-    st.session_state['display_needs_update'] = False
 
+update_attendance_title_str()
 utils.shared_sidebar()
 
   
