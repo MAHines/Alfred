@@ -6,9 +6,13 @@ This module reads the attendance data stored in a private Google sheet and prepa
 
 ## Analyze Grades
 
-This module is primarily designed to analyze grading in a folder of Gradescope scores for an assignment. To get the folder, open the assignment in Gradescope and select "Export Evaluations" at the bottom of the page.
+This module analyzes grading stored in a folder of Gradescope scores for an assignment. To get the folder, open the assignment in Gradescope and select "Export Evaluations" at the bottom of the page.
 
 Drag the folder onto "Drag and drop files here." Give the analysis a name in the modal dialog. An analysis of all problems will appear. To analyze a single problem, use the dropdown menu in the sidebar to select it.
+
+## Update Roster
+
+This module compare the current Canvas roster, as given by the Canvas gradebook, with the current Alfred roster, which is read from the shared Google sheet. The script then adds any new enrollees to the Alfred roster upon request.
 
 ## Settings
 
