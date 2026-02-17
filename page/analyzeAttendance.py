@@ -389,7 +389,7 @@ def handle_course_change():
         st.session_state['analysis_needs_update'] = False
         st.session_state['display_ready'] = False
         st.session_state['attendance_title_str'] = '# Attendance Report'
-    elif st.session_state['selected_course'] == st.session_state['last_selected_course']:
+    elif st.session_state['selected_course'] == st.session_state['cur_analyzed_course']:
         st.session_state['analysis_needs_update'] = False
     else:    
         st.session_state['timesheetName'] = st.session_state['selected_course']

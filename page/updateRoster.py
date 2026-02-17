@@ -16,7 +16,7 @@ def read_Alfred_roster():
     
         readRoster_df: ID, netID, studentName, section
     """
-    if (st.session_state['selected_course'] != 'None selected') and (st.session_state['selected_course'] != st.session_state['last_selected_course']):
+    if st.session_state['selected_course'] != 'None selected':
         st.session_state['rosterSheetName'] = st.session_state['selected_course'] + '_Roster'
         st.session_state['sectionsSheetName'] = st.session_state['selected_course'] + '_Sections'
         
