@@ -110,6 +110,32 @@ def read_roster_sheet():
     
     return 0, readRoster_df
 
+def read_canvas_gradebook_csv():
+    """ Reads the Canvas gradebook from a csv.
+    
+        canvas_df: ID, netID, studentName, sectionNumber
+    """
+
+    if st.session_state['canvas_gradebook_key'] is not None:
+  
+        # Read in the required columns of canvas csv 
+        columns = ["Student", "SIS User ID", "SIS Login ID", "Section"]
+        canvas_df = pd.read_csv(st.session_state['canvas_gradebook_key'],
+                             dtype=str,
+                             skiprows=[1,2],
+                             usecols = columns
+                             )
+        canvas_df = canvas_df[~canvas_df['Student'].str.contains('Student, Test', na=False)]
+        canvas_df = canvas_df.rename(columns = {'SIS User ID':'ID', 'Student': 'studentName', 'SIS Login ID': 'netID', 'Section':'allSections'})
+        canvas_df = canvas_df[['ID', 'netID', 'studentName', 'allSections']]
+        canvas_df['sectionNumber'] = canvas_df['allSections'].str.extract(r'LAB(\d{3})')
+        canvas_df.drop(columns=['allSections'], inplace=True)
+        st.session_state['gradebook_uploaded'] = True
+        st.session_state['canvas_df'] = canvas_df
+        
+#     st.markdown('## Canvas_df')
+#     st.dataframe(canvas_df)
+
 @retry(
     stop=stop_after_attempt(5), # Stop after a maximum of 5 attempts
     wait=wait_fixed(1) 

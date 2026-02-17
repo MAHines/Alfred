@@ -50,34 +50,7 @@ def read_sections_sheet():
     headers = data.pop(0)
     sections_df = pd.DataFrame(data, columns = headers)
     
-    return 0, sections_df
-
-def read_canvas_gradebook_csv():
-    """ Reads the Canvas gradebook from a csv.
-    
-        canvas_df: ID, netID, studentName, sectionNumber
-    """
-
-    if st.session_state['canvas_gradebook_key'] is not None:
-  
-        # Read in the required columns of canvas csv 
-        columns = ["Student", "SIS User ID", "SIS Login ID", "Section"]
-        canvas_df = pd.read_csv(st.session_state['canvas_gradebook_key'],
-                             dtype=str,
-                             skiprows=[1,2],
-                             usecols = columns
-                             )
-        canvas_df = canvas_df[~canvas_df['Student'].str.contains('Student, Test', na=False)]
-        canvas_df = canvas_df.rename(columns = {'SIS User ID':'ID', 'Student': 'studentName', 'SIS Login ID': 'netID', 'Section':'allSections'})
-        canvas_df = canvas_df[['ID', 'netID', 'studentName', 'allSections']]
-        canvas_df['sectionNumber'] = canvas_df['allSections'].str.extract(r'LAB(\d{3})')
-        canvas_df.drop(columns=['allSections'], inplace=True)
-        st.session_state['gradebook_uploaded'] = True
-        st.session_state['canvas_df'] = canvas_df
-        
-#     st.markdown('## Canvas_df')
-#     st.dataframe(canvas_df)
-        
+    return 0, sections_df        
 
 def add_new_enrollees():
     new_enrollees_df = st.session_state['new_enrollees_df']
@@ -134,7 +107,7 @@ if st.session_state['sections_df'] is None: # Note that analyzeAttendance.py doe
         on_change = read_Alfred_roster
     )
     
-# Logic to display the file uploader or the "Analyze a different file/folder" button
+# Logic to display the Canvas gradebook file uploader
 if st.session_state['canvas_df'] is None:
     # Display the uploader only if no file has been uploaded yet
     st.file_uploader(
@@ -142,7 +115,7 @@ if st.session_state['canvas_df'] is None:
         type=['csv'],
         accept_multiple_files=False,
         key = 'canvas_gradebook_key',
-        on_change = read_canvas_gradebook_csv
+        on_change = utils.read_canvas_gradebook_csv
     )
     
 # The actual calculation is performed when all of the df's have been loaded. No other action needed.

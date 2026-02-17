@@ -14,6 +14,10 @@ Drag the folder onto "Drag and drop files here." Give the analysis a name in the
 
 This module compare the current Canvas roster, as given by the Canvas gradebook, with the current Alfred roster, which is read from the shared Google sheet. The script then adds any new enrollees to the Alfred roster upon request.
 
+## Add Student IDs to Pearson Roster
+
+This module adds student IDs pulled from the current Canvas gradebook to the Pearson roster. The matching is performed based on netID (default) or student name (backup). The module produces a csv which is used to update the Pearson roster, which is then reuploaded to Pearson.
+
 ## Settings
 
 This module handles the settings for the various modules. The data are stored in Alfred/.streamlit/prefs.toml. The file can also be edited with a text editor.
