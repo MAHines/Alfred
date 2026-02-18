@@ -117,7 +117,9 @@ if st.session_state['canvas_df'] is None:
         key = 'canvas_gradebook_key',
         on_change = utils.read_canvas_gradebook_csv
     )
-    
+else:
+    st.write('### Canvas gradebook already uploaded')
+
 # The actual calculation is performed when all of the df's have been loaded. No other action needed.
 if all(v is not None for v in [st.session_state['canvas_df'],st.session_state['readRoster_df']]):
     

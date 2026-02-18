@@ -96,6 +96,8 @@ if st.session_state['pearson_roster_df'] is None:
         key = 'pearson_roster_key',
         on_change = read_pearson_roster_csv
     )
+else:
+    st.write('### Pearson roster already uploaded.')
 
 # Logic to display the Canvas gradebook file uploader
 if st.session_state['canvas_df'] is None:
@@ -107,6 +109,8 @@ if st.session_state['canvas_df'] is None:
         key = 'canvas_gradebook_key',
         on_change = utils.read_canvas_gradebook_csv
     )
+else:
+    st.write('### Canvas gradebook already uploaded')
     
 if all(v is not None for v in [st.session_state['canvas_df'],st.session_state['pearson_roster_df']]):
 

@@ -57,6 +57,11 @@ def update_skip_days():
     st.session_state['toml_dict']['user']['skip_days'] = input  # Needs input validation
     st.session_state['file_dirty'] = True
     
+def update_pct_pearson():
+    input = st.session_state.pct_pearson_input
+    st.session_state['toml_dict']['user']['pct_pearson'] = input  # Needs input validation
+    st.session_state['file_dirty'] = True
+    
 
 if 'toml_dict' not in st.session_state:
     utils.read_prefs()
@@ -102,11 +107,20 @@ st.text_input('Allowed classes',
 if 'skip_days_input' not in st.session_state:
     st.session_state['skip_days_input'] = st.session_state['toml_dict']['user']['skip_days']
 
-st.text_input('skip_days_input',
+st.text_input('Days skipped in lab (e.g., partial week for Feb break)',
                 key = 'skip_days_input',
                 on_change = update_skip_days)
+
+# Set the percent of PS grade alloted to Pearson problems
+if 'pct_pearson_input' not in st.session_state:
+    st.session_state['pct_pearson_input'] = str(st.session_state['toml_dict']['user']['pct_pearson'])
+
+st.text_input('Percentage of PS grade alloted to Pearson problems (e.g., 0.5)',
+                key = 'pct_pearson_input',
+                on_change = update_pct_pearson) 
 
 if st.session_state['file_dirty']:
     st.button('Save Preferences',
                key = 'save_prefs',
-               on_click = utils.write_prefs)
+               on_click = utils.write_prefs,
+               type = 'primary')

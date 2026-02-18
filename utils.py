@@ -12,6 +12,22 @@ import time
 import re
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+def test_for_new_keys():
+    """ As new preferences are added to prefs.toml, we need a way to evolve the file format
+        without forcing everyone to recreate their prefs file. This function tests for the
+        existence of 'new' keys, adds their default value if they are missing, then rewrites
+        prefs.toml if changes have been made. 
+     """
+    
+    start_num_keys = len(st.session_state['toml_dict']['user'])
+    
+    # New keys since initial Alfred
+    st.session_state['toml_dict']['user'].setdefault('pct_pearson', 0.5)
+    
+    # Rewrite prefs if necessary
+    if len(st.session_state['toml_dict']['user']) > start_num_keys: # Key added to existing pref file
+        write_prefs()  
+
 def read_prefs():
 
     # If the prefs file does not exist, make the default file
@@ -24,7 +40,8 @@ def read_prefs():
                         'start_date': '2026-01-26',
                         'spreadsheet_name': 'Lab Attendance, Spring 2026',
                         'allowed_classes': '2070, 2510, Test',
-                        'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: [2026-02-12, 2026-02-13]'
+                        'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: [2026-02-12, 2026-02-13]',
+                        'pct_pearson': 0.5
                         }
                     }
         st.session_state['toml_dict'] = toml_dict
@@ -34,6 +51,8 @@ def read_prefs():
             config = tomlkit.load(fp)
         
         st.session_state['toml_dict'] = config
+        
+        test_for_new_keys()
             
 def write_prefs():
 
@@ -57,6 +76,8 @@ def write_prefs():
     config['user']['allowed_classes'].trivia.comment = '    # Allowed classes e.g., 2070, 2510, Test'
     config['user'].add('skip_days', toml_dict['user']['skip_days'])
     config['user']['skip_days'].trivia.comment = '    # Skipped days e.g., 2070: [], 2510: [2026-02-12, 2026-02-13], Test: []'
+    config['user'].add('pct_pearson', toml_dict['user']['pct_pearson'])
+    config['user']['pct_pearson'].trivia.comment = '    # Percent of PS grade alloted to Pearson problems'
     config.add(nl())
     
     # Dump the modified configument to a string
