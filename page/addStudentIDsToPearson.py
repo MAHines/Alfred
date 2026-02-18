@@ -21,6 +21,7 @@ def read_pearson_roster_csv():
         # Read in the required columns of canvas csv 
         pearson_roster_df = read_csv_from_marker(st.session_state['pearson_roster_key'],
                                  'Name')
+        pearson_roster_df.dropna(how='all', inplace=True)   # Remove completely blank lines
         st.session_state['pearson_roster_df'] = pearson_roster_df
         
 #     st.markdown('## Pearson_roster_df')
@@ -150,21 +151,35 @@ if all(v is not None for v in [st.session_state['canvas_df'],st.session_state['p
                         modPearson_df['Student ID'].notna() &
                         (modPearson_df['Student ID'] != modPearson_df['CUID'])]
                         
-    st.markdown('## Conflicts')
-    info_str = 'Any entries in the following two tables should be carefully examined, '
-    info_str += 'because the CUID calculated in different ways gives different results. '
-    info_str += 'This could happen if two students had the same name, for example.'
-    st.write(info_str)
-    st.dataframe(conflict1_df)
-    st.dataframe(conflict2_df)
+    # If conflicts have been found, alert the user
+    if len(conflict1_df) + len(conflict2_df) > 0:
+        st.markdown('## Conflicts')
+        info_str = 'Any entries in the following two tables should be carefully examined, '
+        info_str += 'because the CUID calculated in different ways gives different results. '
+        info_str += 'This could happen if two students had the same name, for example.'
+        st.write(info_str)
+        st.dataframe(conflict1_df)
+        st.dataframe(conflict2_df)
     
-    st.markdown('## Missing Info')
-    info_str = 'People with missing CUID information may be a TA/undergrad TA or they might have dropped the course. It would '
-    info_str += 'be smart to double check that the script did not miss a modified name.'
-    st.write(info_str)
+    # If two students have the same CUID, alert the user
+    duplicate_CUIDs_df = modPearson_df[modPearson_df['CUID'].duplicated(keep=False) & modPearson_df['CUID'].notna()]
+    if len(duplicate_CUIDs_df) > 0:
+        st.markdown('## Duplicates')
+        info_str = 'Students in this list have identical CUIDs, which should not happen. This may be '
+        info_str = 'due to students having the same name. This needs to be fixed.'
+        st.write(info_str)
+        st.dataframe(duplicate_CUIDs_df)
+    
+    # If a "student" does not have a CUID, alert the user
     missing_CUID_df = modPearson_df[modPearson_df['CUID'].isnull()]
-    st.dataframe(missing_CUID_df)
+    if len(missing_CUID_df) > 0:
+        st.markdown('## Missing Info')
+        info_str = 'People with missing CUID information may be a TA/undergrad TA, or they may have dropped the course. It would '
+        info_str += 'be smart to double check that the script did not miss a modified name.'
+        st.write(info_str)
+        st.dataframe(missing_CUID_df)
 
+    # Present the results and a button for downloading a csv
     st.markdown('## Extracted Cornell IDs')
     info_str = 'Use the button to download the table below. Open the csv, then copy the CUID column into the Student ID column in '
     info_str += 'the original Pearson csv, and upload to Pearson.'
