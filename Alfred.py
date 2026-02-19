@@ -17,7 +17,7 @@ def Home():
 
 
 pg = st.navigation({
-    "Overview": [
+    "": [
         st.Page(Home, title="Alfred", default=True)
     ],
     "Scripts": [
