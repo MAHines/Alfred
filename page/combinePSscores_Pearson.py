@@ -195,6 +195,9 @@ if st.session_state['last_PS'] > 0:
                 gs_df.drop(columns = [gs_col_name], inplace = True)
                 pearson_col_name = 'PS ' + str(ps_num) + ' Mastering'
                 pearson_df.drop(columns = [pearson_col_name], inplace = True)
+        
+        # We may have dropped some cnv columns, so recalculate
+        cnv_ps_columns = [col for col in cnv_df.columns if col.startswith('PS ') and col[3].isdigit()]
                 
         # Add a column of 0's if either gs or pearson is missing a PS
         st.session_state['max_ps_num'] = -1
@@ -258,6 +261,13 @@ if st.session_state['last_PS'] > 0:
         # Present the results and a button for downloading a csv
         st.markdown('## PS Grades for Upload')
         st.dataframe(merged_df)
+        
+        # Now calculate the statistics
+        st.markdown('## PS Statistics')
+        PSonly_df = merged_df[cnv_ps_columns].replace('EX', np.nan).astype(float)
+        PSstats_df = PSonly_df.agg(['median', 'std', 'min', 'max']).round(2)
+        st.dataframe(PSstats_df)
+        
         info_str = 'Use the button below to download the grades. Upload the file to the Canvas gradebook'
         info_str += ' using the Import button. Overwriting previously uploaded grades is OK and does'
         info_str += ' slow down processing.' 
