@@ -72,7 +72,6 @@ if 'canvas_df' not in st.session_state:
 if 'pearson_roster_df' not in st.session_state:
     st.session_state['pearson_roster_df'] = None
 
-
 st.markdown('## Add Student IDs to Pearson')
 
 info_str = 'To find the Pearson roster, go to the Instructor Tools page of Pearson, '
@@ -97,7 +96,7 @@ if st.session_state['pearson_roster_df'] is None:
         on_change = read_pearson_roster_csv
     )
 else:
-    st.write('### Pearson roster already uploaded.')
+    st.write('#### :gray[Pearson roster already uploaded.]')
 
 # Logic to display the Canvas gradebook file uploader
 if st.session_state['canvas_df'] is None:
@@ -110,7 +109,7 @@ if st.session_state['canvas_df'] is None:
         on_change = utils.read_canvas_gradebook_csv
     )
 else:
-    st.write('### Canvas gradebook already uploaded')
+    st.write('#### :gray[Canvas gradebook already uploaded.]')
     
 if all(v is not None for v in [st.session_state['canvas_df'],st.session_state['pearson_roster_df']]):
 
