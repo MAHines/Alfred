@@ -111,6 +111,10 @@ for i in range(14):
 
 st.markdown('## Combine PS Scores for Upload to Canvas')
 
+st.write('Canvas: The PS name should be \'PS \' + integer.')
+st.write('Gradescope: The PS name should be \'PS \' + integer')
+st.write('Pearson: The PS name should be \'PS \' + integer + \' Mastering\'')
+
 st.button("Reset or work on a different course.", 
             on_click=reset_uploader,
             type = 'primary')
