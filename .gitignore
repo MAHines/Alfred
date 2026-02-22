@@ -7,6 +7,9 @@
 # Drawings
 assets/Hobbes_glasses.psd
 
+# Private files
+privateFiles
+
 __pycache__
 .DS_Store
 

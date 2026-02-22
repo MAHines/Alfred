@@ -24,6 +24,7 @@ pg = st.navigation({
         st.Page('page/analyzeAttendance.py', title='Analyze Attendance'),
         st.Page('page/analyzeGradescopeFolder.py', title='Analyze Grades'),
         st.Page('page/combinePSscores_Pearson.py', title='Combine PS Scores'),
+        st.Page('page/makeGradeHistogram.py', title = 'Make Histogram'),
         st.Page('page/updateRoster.py', title='Update Roster'),
         st.Page('page/addStudentIDsToPearson.py', title='Add Student IDs to Pearson Roster'),
         st.Page('page/changePrefs.py', title='Settings'),
