@@ -108,7 +108,7 @@ def histogram_scores():
     if st.session_state['median_grade'] > 0:
         score_cutoffs = calcGradeCutoffs()
         info_text += '<br><br>Estimated Grades <br>'
-        info_text += 'A\'s      >  ' + f"{score_cutoffs[0]:.0f}" + '<br>'
+        info_text += 'A\'s      ≥  ' + f"{score_cutoffs[0]:.0f}" + '<br>'
         info_text += 'B\'s      ' + f"{score_cutoffs[1]:.0f}" + ' – ' + f"{score_cutoffs[0]-1:.0f}" + '<br>'
         info_text += 'C/C+  ' + f"{score_cutoffs[2]:.0f}" + ' – ' + f"{score_cutoffs[1]-1:.0f}" + '<br>'
         info_text += 'C–      ' + f"{score_cutoffs[3]:.0f}" + ' – ' + f"{score_cutoffs[2]-1:.0f}" + '<br>'
@@ -185,7 +185,7 @@ if 'median_grade' not in st.session_state:
     st.session_state['median_grade'] = -1
     initialize_cutoffs()
 if 'xaxis_label' not in st.session_state:
-    st.session_state['xaxis_label'] = 'Grade'
+    st.session_state['xaxis_label'] = 'Score'
     st.session_state['xaxis_max'] = 100
     st.session_state['bin_width'] = 5
 
