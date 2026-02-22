@@ -20,7 +20,7 @@ def reset_uploader():
     st.session_state['cutoffs_df'] = None
     st.session_state['median_grade'] = -1
     initialize_cutoffs()
-    st.session_state['xaxis_label'] = 'Grade'
+    st.session_state['xaxis_label'] = 'Score'
     st.session_state['selected_course'] = st.session_state['course_select_list'][0]
     st.session_state['xaxis_max'] = 100
     st.session_state['bin_width'] = 5
