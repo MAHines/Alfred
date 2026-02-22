@@ -111,16 +111,17 @@ def histogram_scores():
         info_text += 'A\'s      >  ' + f"{score_cutoffs[0]:.0f}" + '<br>'
         info_text += 'B\'s      ' + f"{score_cutoffs[1]:.0f}" + ' – ' + f"{score_cutoffs[0]-1:.0f}" + '<br>'
         info_text += 'C/C+  ' + f"{score_cutoffs[2]:.0f}" + ' – ' + f"{score_cutoffs[1]-1:.0f}" + '<br>'
-        info_text += 'D/F     Below ' + f"{score_cutoffs[2]:.0f}"
+        info_text += 'C–      ' + f"{score_cutoffs[3]:.0f}" + ' – ' + f"{score_cutoffs[2]-1:.0f}" + '<br>'
+        info_text += 'D/F     Below ' + f"{score_cutoffs[3]:.0f}"
 
     fig.add_annotation(
         xref="paper",
         yref="paper",
-        x=0.025,  # X position relative to plot area (0=left, 1=right)
-        y=0.975,  # Y position relative to plot area (0=bottom, 1=top)
+        x=0.01,  # X position relative to plot area (0=left, 1=right)
+        y=0.99,  # Y position relative to plot area (0=bottom, 1=top)
         text = info_text,
         showarrow=False,
-        bgcolor="white", # Optional: adds a white background to the text box
+        #bgcolor="white", # Optional: adds a white background to the text box
         align="left" # Aligns the text within the box
     )
 
