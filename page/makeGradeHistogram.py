@@ -177,7 +177,7 @@ if 'exam_df' not in st.session_state:
     st.session_state['exam_df'] = None
 if 'course_select_list' not in st.session_state:
     st.session_state['course_select_list'] = ['None', 'Chem 2070/2080 (median = 2.9)',
-        'Chem 1570 (median = 2.8)', 'Chem 2090/3570/3580 (median = 3.0)',
+        'Chem 1570 (median = 2.8)', 'Chem 2090/2510/3570/3580 (median = 3.0)',
         'Chem 2150/3590/3600 (median = 3.3)']
 if 'median_grade_list' not in st.session_state:
     st.session_state['median_grade_list'] = [-1, 2.9, 2.8, 3.0, 3.3]
