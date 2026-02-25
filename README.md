@@ -6,9 +6,11 @@ This module reads the attendance data stored in a private Google sheet and prepa
 
 ## Analyze Grades
 
-This module analyzes grading stored in a folder of Gradescope scores for an assignment. To get the folder, open the assignment in Gradescope and select "Export Evaluations" at the bottom of the page.
+This module analyzes grading stored in a folder of Gradescope scores for an assignment, producing a grader-by-grader analysis as shown below.  
 
-Drag the folder onto "Drag and drop files here." Give the analysis a name in the modal dialog. An analysis of all problems will appear. To analyze a single problem, use the dropdown menu in the sidebar to select it.
+![Sample grading graph](assets/Grading_Report.png "Sample Grading Report")
+
+To perform the analysis, open the assignment in Gradescope and select "Export Evaluations" at the bottom of the page. Drag the resulting folder from your Downloads folder onto "Drag and drop files here." Give the analysis a name in the modal dialog. An analysis of all problems will appear. To analyze a single problem, use the dropdown menu in the sidebar to select it.
 
 ## Combine PS Scores
 
@@ -16,7 +18,9 @@ This module combines problem set (PS) scores from Gradescope and Pearson using t
 
 ## Make Histogram
 
-This module produces a histogram of grades from a Gradescope csv and optionally calculates the estimated grade cutoffs based on the course median. This module requires Chrome be installed on your computer for the png output.
+This module produces a histogram of grades from a Gradescope csv and optionally calculates the estimated grade cutoffs based on the course median. This module requires Chrome be installed on your computer for the png output. A sample histogram is shown below.  
+
+![Sample histogram](assets/Histogram.png "Sample Histogram with Estimated Grades")
 
 ## Update Roster
 
