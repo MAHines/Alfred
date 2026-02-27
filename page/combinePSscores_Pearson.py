@@ -273,7 +273,7 @@ if st.session_state['last_PS'] > 0:
         st.dataframe(PSstats_df)
         
         info_str = 'Use the button below to download the grades. Upload the file to the Canvas gradebook'
-        info_str += ' using the Import button. Overwriting previously uploaded grades is OK and does'
+        info_str += ' using the Import button. Overwriting previously uploaded grades is OK and does not'
         info_str += ' slow down processing.' 
         st.write(info_str)
         

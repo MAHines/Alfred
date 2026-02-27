@@ -62,6 +62,10 @@ def update_pct_pearson():
     st.session_state['toml_dict']['user']['pct_pearson'] = input  # Needs input validation
     st.session_state['file_dirty'] = True
     
+def update_lab_order():
+    input = st.session_state.lab_order_input
+    st.session_state['toml_dict']['user']['lab_order'] = input  # Needs input validation
+    st.session_state['file_dirty'] = True    
 
 if 'toml_dict' not in st.session_state:
     utils.read_prefs()
@@ -118,6 +122,14 @@ if 'pct_pearson_input' not in st.session_state:
 st.text_input('Percentage of PS grade alloted to Pearson problems (e.g., 0.5)',
                 key = 'pct_pearson_input',
                 on_change = update_pct_pearson) 
+
+# Set the order of the labs
+if 'lab_order' not in st.session_state:
+    st.session_state['lab_order_input'] = str(st.session_state['toml_dict']['user']['lab_order'])
+
+st.text_input('First word of each lab in chronological order e.g., 2070: [\'Density\', …]',
+                key = 'lab_order_input',
+                on_change = update_lab_order) 
 
 if st.session_state['file_dirty']:
     st.button('Save Preferences',

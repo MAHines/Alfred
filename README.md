@@ -14,7 +14,27 @@ To perform the analysis, open the assignment in Gradescope and select "Export Ev
 
 ## Combine PS Scores
 
-This module combines problem set (PS) scores from Gradescope and Pearson using the weighting defined in Settings, then prepares a csv for upload to Canvas. _Note:_ This script preserves any 'EX' entries in the Canvas gradebook. No grade is recorded for a pre-existing 'EX'.
+This module combines problem set (PS) scores from Gradescope and Pearson using the weighting defined in Settings, then prepares a csv for upload to Canvas.  
+
+_Note:_ This script preserves any 'EX' entries in the Canvas gradebook. No grade is recorded for a pre-existing 'EX'.
+
+## Combine Lab Scores
+
+This module combines prelab and postlab scores from Gradescope with any late penalties calculated from the Canvas Late Report to generate the total lab score. The module then prepares a csv for upload to Canvas.
+
+This module reads in 3 csv's:  
+&emsp;&emsp;Canvas gradebook  
+&emsp;&emsp;Canvas Late Report, generated from Late Assignments in Course Analytics  
+&emsp;&emsp;Gradescope gradebook 
+ 
+The module assumes that:  
+– The names of the pre- and post-lab assignments start with the same word in Gradebook and in Canvas  
+– That starting word is unique to the lab  
+– The pre- and post-lab assignments have "pre-lab" and "post-lab" in the assignment names   
+
+The script gives a 10 min grace period as per Cynthia
+
+_Note:_ This script preserves any 'EX' entries in the Canvas gradebook. No grade is recorded for a pre-existing 'EX'.
 
 ## Make Histogram
 

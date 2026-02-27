@@ -23,6 +23,10 @@ def test_for_new_keys():
     
     # New keys since initial Alfred
     st.session_state['toml_dict']['user'].setdefault('pct_pearson', 0.5)
+    long_str = '2070: [\'Density\', \'Determination\', \'Recycling\','
+    long_str += '\'Iron\', \'Unknown\', \'Vitamin\', \'Optical\', \'Copper\','
+    long_str += '\'Mole\', \'Gas\']'
+    st.session_state['toml_dict']['user'].setdefault('lab_order', long_str)
     
     # Rewrite prefs if necessary
     if len(st.session_state['toml_dict']['user']) > start_num_keys: # Key added to existing pref file
@@ -33,6 +37,9 @@ def read_prefs():
     # If the prefs file does not exist, make the default file
     prefs_file_path = Path(__file__).parent / '.streamlit' / 'prefs.toml'
     prefs_file_path.parent.mkdir(parents=True, exist_ok=True) # Ensure the parent directory exists
+    long_str = '2070: [\'Density\', \'Determination\', \'Recycling\','
+    long_str += '\'Iron\', \'Unknown\', \'Vitamin\', \'Optical\', \'Copper\','
+    long_str += '\'Mole\', \'Gas\']'
     if not prefs_file_path.is_file():
         toml_dict = {'user': {
                         'version': '1.0',
@@ -41,7 +48,8 @@ def read_prefs():
                         'spreadsheet_name': 'Lab Attendance, Spring 2026',
                         'allowed_classes': '2070, 2510, Test',
                         'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: [2026-02-12, 2026-02-13]',
-                        'pct_pearson': 0.5
+                        'pct_pearson': 0.5,
+                        'lab_order': long_str
                         }
                     }
         st.session_state['toml_dict'] = toml_dict
@@ -78,6 +86,8 @@ def write_prefs():
     config['user']['skip_days'].trivia.comment = '    # Skipped days e.g., 2070: [], 2510: [2026-02-12, 2026-02-13], Test: []'
     config['user'].add('pct_pearson', toml_dict['user']['pct_pearson'])
     config['user']['pct_pearson'].trivia.comment = '    # Percent of PS grade alloted to Pearson problems'
+    config['user'].add('lab_order', toml_dict['user']['lab_order'])
+    config['user']['lab_order'].trivia.comment = '    # First word of each lab in chronological order e.g., 2070: [\'Density\', …]'
     config.add(nl())
     
     # Dump the modified configument to a string

@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import streamlit.components.v1 as components
+import utils
 
 # This is a streamlit package that is designed primarily to analyze grading in a folder of Gradescope
 #   scores for an assignment. To get the folder, open the assignment in Gradescope and select
@@ -301,4 +302,7 @@ if st.session_state['file_uploaded'] and st.session_state['analysis_done']:
                             st.session_state.probNameList,
                             key = 'problem_select_box',
                             on_change=handle_problem_change)
+
+        
+utils.shared_sidebar()
 
