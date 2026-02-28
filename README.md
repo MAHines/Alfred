@@ -28,13 +28,21 @@ This module reads in 3 csv's:
 &emsp;&emsp;Gradescope gradebook 
  
 The module assumes that:  
-– The names of the pre- and post-lab assignments start with the same word in Gradebook and in Canvas  
-– That starting word is unique to the lab  
-– The pre- and post-lab assignments have "pre-lab" and "post-lab" in the assignment names   
+&emsp;– The names of the pre- and post-lab assignments start with the same word in Gradebook and in Canvas  
+&emsp;– That starting word is unique to the lab  
+&emsp;– The pre- and post-lab assignments have "pre-lab" and "post-lab" in the assignment names   
 
 The script gives a 10 min grace period as per Cynthia
 
 _Note:_ This script preserves any 'EX' entries in the Canvas gradebook. No grade is recorded for a pre-existing 'EX'.
+
+## Get Turnitin Similarities  
+
+This module queries Canvas for all of the Turnitin similarity scores for a single assignment using the current Canvas gradebook. The scores are output in a csv.  
+
+This module requires:  
+&emsp;– a Canvas token be stored via Settings, and   
+&emsp;– the base URL of the Canvas instance be set in Settings.
 
 ## Make Histogram
 
@@ -59,6 +67,7 @@ This module handles the settings for the various modules. The data are stored in
 – pip install gspread oauth2client  
 – pip install watchdog  
 – pip install --upgrade kaleido  (see _Note 3_ below)  
+– pip install canvasapi   
 – cd to folder that will contain Alfred  
 – git clone https://github.com/MAHines/Alfred.git   
 – copy secrets.toml to Alfred/.streamlit

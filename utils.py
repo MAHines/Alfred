@@ -27,6 +27,7 @@ def test_for_new_keys():
     long_str += '\'Iron\', \'Unknown\', \'Vitamin\', \'Optical\', \'Copper\','
     long_str += '\'Mole\', \'Gas\']'
     st.session_state['toml_dict']['user'].setdefault('lab_order', long_str)
+    st.session_state['toml_dict']['user'].setdefault('canvas_domain', '')
     
     # Rewrite prefs if necessary
     if len(st.session_state['toml_dict']['user']) > start_num_keys: # Key added to existing pref file
@@ -49,7 +50,8 @@ def read_prefs():
                         'allowed_classes': '2070, 2510, Test',
                         'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: [2026-02-12, 2026-02-13]',
                         'pct_pearson': 0.5,
-                        'lab_order': long_str
+                        'lab_order': long_str,
+                        'canvas_domain': ''
                         }
                     }
         st.session_state['toml_dict'] = toml_dict
@@ -88,6 +90,8 @@ def write_prefs():
     config['user']['pct_pearson'].trivia.comment = '    # Percent of PS grade alloted to Pearson problems'
     config['user'].add('lab_order', toml_dict['user']['lab_order'])
     config['user']['lab_order'].trivia.comment = '    # First word of each lab in chronological order e.g., 2070: [\'Density\', …]'
+    config['user'].add('canvas_domain', toml_dict['user']['canvas_domain'])
+    config['user']['canvas_domain'].trivia.comment = '    # The base URL of the Canvas instance, including https://'
     config.add(nl())
     
     # Dump the modified configument to a string

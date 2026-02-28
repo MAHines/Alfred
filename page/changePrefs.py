@@ -3,8 +3,10 @@ import tomlkit
 from tomlkit import comment, document, nl, table
 from pathlib import Path
 from datetime import datetime
+import keyring as kr
 import utils
 import re
+import os
 
 def update_late_minutes():
     input = st.session_state.tardy_input
@@ -67,13 +69,31 @@ def update_lab_order():
     st.session_state['toml_dict']['user']['lab_order'] = input  # Needs input validation
     st.session_state['file_dirty'] = True    
 
+def update_canvas_domain():
+    input = st.session_state.canvas_domain_input
+    if input.endswith('/'):
+        input = input[:-1]
+    st.session_state['toml_dict']['user']['canvas_domain'] = input  # Needs input validation
+    st.session_state['file_dirty'] = True    
+
+# Store Canvas token in system keyring
+def update_canvas_token():
+    input = st.session_state.canvas_token_input
+    username = os.getlogin()
+    kr.set_password('alfred_canvas', username, input)
+    st.session_state.canvas_token_input = ''    
+
 if 'toml_dict' not in st.session_state:
     utils.read_prefs()
 if 'file_dirty' not in st.session_state:
     st.session_state['file_dirty'] = False
 
 st.markdown("# Alfred Settings")
-utils.shared_sidebar()
+
+st.text_input('Enter new/updated Canvas token',
+                key = 'canvas_token_input',
+                on_change = update_canvas_token)
+st.divider() 
 
 # Set the tardy minutes
 if 'tardy_input' not in st.session_state:
@@ -124,15 +144,25 @@ st.text_input('Percentage of PS grade alloted to Pearson problems (e.g., 0.5)',
                 on_change = update_pct_pearson) 
 
 # Set the order of the labs
-if 'lab_order' not in st.session_state:
+if 'lab_order_input' not in st.session_state:
     st.session_state['lab_order_input'] = str(st.session_state['toml_dict']['user']['lab_order'])
 
 st.text_input('First word of each lab in chronological order e.g., 2070: [\'Density\', …]',
                 key = 'lab_order_input',
                 on_change = update_lab_order) 
 
+# Set the base URL of Canvas
+if 'canvas_domain_input' not in st.session_state:
+    st.session_state['canvas_domain_input'] = str(st.session_state['toml_dict']['user']['canvas_domain'])
+
+st.text_input('The base URL of the Canvas instance, including https://',
+                key = 'canvas_domain_input',
+                on_change = update_canvas_domain) 
+
 if st.session_state['file_dirty']:
     st.button('Save Preferences',
                key = 'save_prefs',
                on_click = utils.write_prefs,
                type = 'primary')
+
+utils.shared_sidebar()
