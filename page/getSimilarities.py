@@ -230,7 +230,7 @@ if ss['auth_token'] != 'No token':
         file_name = ' '.join(assignment_name.split()[:3]) + ' Similarity.csv'
         
         similarity_data = ss['cnv_df'].to_csv(index = False, header = True).encode('utf-8')
-        st.download_button(label = 'Download Grades for Canvas Upload',
+        st.download_button(label = 'Download Similarity Report as csv',
                         data = similarity_data,
                         file_name = file_name,
                         mime = 'text/csv',
