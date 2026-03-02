@@ -17,6 +17,7 @@ import utils
 from canvasapi import Canvas
 
 def get_auth_token():
+    """ Get Canvas token from system keychain. This needs to be set up in Settings """
     try:
         username = os.getlogin()
         pwd = kr.get_password("alfred_canvas", username)
@@ -27,7 +28,7 @@ def get_auth_token():
         return 'No token'
 
 def currentTerm():
-# Guesses the current semester based on today's date.
+    """ Guesses the current semester based on today's date. """
     today = date.today()
     springEnd = datetime.strptime('May 30 2025', '%b %d %Y').date().replace(year=today.year)
     summerEnd = datetime.strptime('Aug 15 2025', '%b %d %Y').date().replace(year=today.year)
@@ -35,6 +36,7 @@ def currentTerm():
     return term + ' ' + str(today.year)
     
 def handle_course_change():
+    """ Handles course selection change drop down """
     selected_course = ss['selected_course']
     
     if ss['last_selected_course'] != selected_course:  # Changed value
@@ -43,11 +45,11 @@ def handle_course_change():
         if selected_course != 'None selected': # Need to update assignment list
             ss['assignment_dict'] = getAssignmentDict()
         else:
-            ss['assignment_dict'] = {'None selected': 0}
+            ss['assignment_dict'] = {'None selected': 0} 
             
 
 def handle_cnv_upload_change():
-    # Read in the required columns of canvas csv plus any that include 'lab'
+    """ Read in the Canvas gradebook, keeping only a few columns  """
     columns = ["Student", "ID", "SIS User ID", "SIS Login ID", "Section"]
     cnv_df = pd.read_csv(st.session_state['cnv_uploader_key'],
                          dtype = str,
@@ -56,6 +58,7 @@ def handle_cnv_upload_change():
                          )
     cnv_df = cnv_df[~cnv_df['Student'].str.contains('Student, Test', na=False)] # Remove test student
     cnv_df['similarity'] = np.nan
+    cnv_df['turnitin_report'] = None
     
     st.session_state['cnv_df'] = cnv_df
 
@@ -63,8 +66,8 @@ def handle_assignment_change():
     selected_assignment = ss['selected_assignment']
 
 def getCourseDict(onlyThisTerm = True):
-# Returns a dict of courses to which the current user has access. By default, only courses
-#   from the current semester are returned. Pass onlyThisTerm = False to get all courses.
+    """Returns a dict of courses to which the current user has access. By default, only courses
+        from the current semester are returned. Pass onlyThisTerm = False to get all courses. """
 
     courses = ss['canvas'].get_courses(include=["term"])
     present = datetime.now()
@@ -76,13 +79,13 @@ def getCourseDict(onlyThisTerm = True):
     for course in courses:
         if not onlyThisTerm or course.term['name'] == curTerm:
             names.append(course.name)
-            ids.append(course.id)
+            ids.append(course.id) 
 
     course_dict = {k: v for k, v in zip(names, ids)}
     return course_dict
     
 def getAssignmentDict():
-# Returns a dict of assignments for course id ss['course_dict'][ss['last_selected_course_index']]
+    """ Returns a dict of assignments for course id ss['course_dict'][ss['last_selected_course_index']] """
 
     course_id = ss['course_dict'][ss['last_selected_course']]
     course = ss['canvas'].get_course(course_id)
@@ -99,25 +102,32 @@ def getAssignmentDict():
     return assignment_dict
 
 def getSimilarity(course_id, assignment_id, student_id): # Canvas ID, not CUID
+    """ Gets the Turnitin similarity score and report for one student """
+    # Formulate the Canvas query
     auth_token = 'Bearer ' + ss['auth_token']
     url = (ss['canvas_domain'] + '/api/v1/courses/' + f"{int(course_id)}" + '/assignments/'
             + f"{int(assignment_id)}" + '/submissions/' + f"{int(student_id)}")
     headers = {"authorization": auth_token}
     response = requests.get(url, headers=headers)
 
+    # Process the json response
     if response.status_code == 200: # Success
         json_data = response.json()
         if 'turnitin_data' in json_data:
             attachment_name = list(json_data['turnitin_data'].keys())[0]
             similarity = json_data['turnitin_data'][attachment_name]['similarity_score']
+            turnitin_report = ss['canvas_domain'] + json_data['turnitin_data'][attachment_name]['view_report_url']
         else:
             similarity = float('nan')
+            turnitin_report = None
     else:
         similarity = float('nan')   # User may have dropped, not turned in assignment, etc.
+        turnitin_report = None
 
-    return similarity
+    return similarity, turnitin_report
     
 def getAllSimilarities():
+    """ Walks through the students in the Gradebook, querying for a Turnitin report"""
     cnv_df = ss['cnv_df']
     course_id = ss['course_dict'][ss['last_selected_course']]
     assignment_id = ss['assignment_dict'][ss['selected_assignment']]
@@ -125,12 +135,17 @@ def getAllSimilarities():
     ii = 0
     status_text.text("Querying Canvas…")
     for row in cnv_df.itertuples(index = True):
-        similarity = getSimilarity(course_id, assignment_id, row.ID)
+        similarity, turnitin_report = getSimilarity(course_id, assignment_id, row.ID)
         cnv_df.loc[row.Index, 'similarity'] = similarity
+        cnv_df.loc[row.Index, 'turnitin_report'] = turnitin_report
         ii += 1
         ss['progress'] = ii/students
-        progress_bar.progress(ss['progress'])
+        if ii%4 == 0:
+            progress_bar.progress(ss['progress']) # Update every 4 students for efficiency
     
+    # Sort dataframe by similarity
+    ss['cnv_df'] = ss['cnv_df'].sort_values(by='similarity', ascending=False)
+    ss['progress'] = 1.0 
     status_text.text("Operation complete!")
 
 def reset_uploader():
@@ -141,11 +156,11 @@ def reset_uploader():
     ss['selected_assignment'] = 'None selected'
     ss.progress = 0.0
 
-# Get the password
+# Read in preferences, then Canvas token, then Canvas class, then current list of courses
 if 'toml_dict' not in st.session_state:
     utils.read_prefs()
 if 'auth_token' not in ss:
-    auth_token = get_auth_token()
+    auth_token = get_auth_token()   # Returns 'No token' if no token
     ss['auth_token'] = auth_token
 if 'canvas_domain' not in ss:
     ss['canvas_domain'] = ss['toml_dict']['user']['canvas_domain']
@@ -222,9 +237,15 @@ if ss['auth_token'] != 'No token':
         progress_bar = st.progress(ss['progress'])
         status_text = st.empty()
     
-    if ss['cnv_df'] is not None:
-        st.markdown('## Similarity Report')
-        st.dataframe(st.session_state['cnv_df'])
+    # If a similarity report has finished, display a button for downloading report
+    if ss['cnv_df'] is not None and ss['progress'] > 0.98:
+        st.markdown('## Similarity Report') 
+        st.dataframe(st.session_state['cnv_df'],
+                    column_config={'turnitin_report': st.column_config.LinkColumn(
+                    "Turnitin Link",
+                    display_text="Click for report" # Optional: custom text to display instead of the full URL
+        )
+    })
         
         assignment_name = ss['selected_assignment']
         file_name = ' '.join(assignment_name.split()[:3]) + ' Similarity.csv'
