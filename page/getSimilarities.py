@@ -115,8 +115,10 @@ def getSimilarity(course_id, assignment_id, student_id): # Canvas ID, not CUID
         json_data = response.json()
         if 'turnitin_data' in json_data:
             attachment_name = list(json_data['turnitin_data'].keys())[0]
-            similarity = json_data['turnitin_data'][attachment_name]['similarity_score']
-            turnitin_report = ss['canvas_domain'] + json_data['turnitin_data'][attachment_name]['view_report_url']
+            similarity = json_data.get('turnitin_data', {}).get(attachment_name, {}).get('similarity_score')
+            report_url = json_data.get('turnitin_data', {}).get(attachment_name, {}).get('view_report_url')
+            if report_url is not None:
+                turnitin_report = ss['canvas_domain'] + report_url
         else:
             similarity = float('nan')
             turnitin_report = None
