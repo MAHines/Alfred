@@ -67,7 +67,8 @@ This module handles the settings for the various modules. The data are stored in
 – pip install gspread oauth2client  
 – pip install watchdog  
 – pip install --upgrade kaleido  (see _Note 3_ below)  
-– pip install canvasapi   
+– pip install canvasapi
+– pip install keyring   
 – cd to folder that will contain Alfred  
 – git clone https://github.com/MAHines/Alfred.git   
 – copy secrets.toml to Alfred/.streamlit
