@@ -11,8 +11,6 @@ import keyring as kr
 from datetime import datetime, date, timedelta, timezone
 import os
 import requests
-import json
-import time
 import utils
 from canvasapi import Canvas
 
@@ -70,16 +68,33 @@ def getCourseDict(onlyThisTerm = True):
         from the current semester are returned. Pass onlyThisTerm = False to get all courses. """
 
     courses = ss['canvas'].get_courses(include=["term"])
-    present = datetime.now()
 
     names = ['None selected']
     ids = [0]
     curTerm = currentTerm()
+    
     # Iteration required because Canvas returns PaginatedList
     for course in courses:
-        if not onlyThisTerm or course.term['name'] == curTerm:
-            names.append(course.name)
-            ids.append(course.id) 
+        course_id = getattr(course, "id", None)
+        course_name = getattr(course, "name", None)
+        term_obj = getattr(course, "term", None)
+
+        # Skip malformed/incomplete course objects
+        if course_id is None or not course_name:
+            continue
+
+        if not onlyThisTerm:
+            names.append(course_name)
+            ids.append(course_id)
+            continue
+
+        # If term info is missing, skip adding
+        if term_obj is None:
+            continue
+
+        if isinstance(term_obj, dict) and term_obj.get("name") == curTerm:
+            names.append(course_name)
+            ids.append(course_id)
 
     course_dict = {k: v for k, v in zip(names, ids)}
     return course_dict
@@ -93,22 +108,34 @@ def getAssignmentDict():
     
     names = ['None selected']
     ids = [0]
+    
     # Iteration required because Canvas returns PaginatedList
     for assignment in assignments:
-        names.append(str(assignment.name))
-        ids.append(assignment.id)
+        assignment_id = getattr(assignment, "id", None)
+        assignment_name = getattr(assignment, "name", None)
+
+        if assignment_id is None or not assignment_name:
+            continue
+
+        names.append(str(assignment_name))
+        ids.append(assignment_id)
     
     assignment_dict = {k: v for k, v in zip(names, ids)}
     return assignment_dict
 
 def getSimilarity(course_id, assignment_id, student_id): # Canvas ID, not CUID
     """ Gets the Turnitin similarity score and report for one student """
+    
     # Formulate the Canvas query
     auth_token = 'Bearer ' + ss['auth_token']
     url = (ss['canvas_domain'] + '/api/v1/courses/' + f"{int(course_id)}" + '/assignments/'
             + f"{int(assignment_id)}" + '/submissions/' + f"{int(student_id)}")
     headers = {"authorization": auth_token}
-    response = requests.get(url, headers=headers)
+    
+    try:
+        response = requests.get(url, headers = headers, timeout = 20)
+    except Exception:
+        return float('nan'), None
 
     # Process the json response
     if response.status_code == 200: # Success
@@ -230,7 +257,7 @@ if ss['auth_token'] != 'No token':
     
     course_id = ss['course_dict'][ss['last_selected_course']]
     assignment_id = ss['assignment_dict'][ss['selected_assignment']]
-    if (ss['cnv_df'] is not None and course_id > 0 and assignment_id > 0 and ss['progress'] < 0.5):
+    if (ss['cnv_df'] is not None and course_id > 0 and assignment_id > 0 and ss['progress'] < 0.99):
         
         st.button('Get Similarities',
                         on_click = getAllSimilarities,
@@ -245,7 +272,7 @@ if ss['auth_token'] != 'No token':
         st.dataframe(st.session_state['cnv_df'],
                     column_config={'turnitin_report': st.column_config.LinkColumn(
                     "Turnitin Link",
-                    display_text="Click for report" # Optional: custom text to display instead of the full URL
+                    display_text="Click for report"
         )
     })
         
