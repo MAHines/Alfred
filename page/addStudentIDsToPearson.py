@@ -196,5 +196,6 @@ if all(v is not None for v in [st.session_state['canvas_df'],st.session_state['p
                     mime = 'text/csv',
                     type = 'primary')
 
+utils.shared_sidebar()
 
 

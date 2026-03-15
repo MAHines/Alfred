@@ -1,5 +1,9 @@
 # Alfred – A Streamlit package to manage Chemistry courses 
 
+<div align="center">
+    <img src="assets/Alfred.png" alt="Alfred logo" style="width: 25%;">
+</div>
+
 ## Analyze Attendance
 
 This module reads the attendance data stored in a private Google sheet and prepares an attendance report.
