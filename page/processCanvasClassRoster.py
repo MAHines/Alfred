@@ -20,7 +20,7 @@ def main():
     canvasRoster_df['netID'] = canvasRoster_df['Email'].str.split('@', expand=True)[0]
     
     # Use .str.extract() with a regular expression to capture the three characters after LAB
-   canvasRoster_df['labSectionNum'] = canvasRoster_df['Section Name'].str.extract('LAB(.{3})')
+    canvasRoster_df['labSectionNum'] = canvasRoster_df['Section Name'].str.extract('LAB(.{3})')
     
     canvasRoster_df['lastName'] = canvasRoster_df['Student Name'].str.split().str[-1]
     canvasRoster_df['firstName'] = canvasRoster_df['Student Name'].str.rsplit(pat=' ', n=1).str.get(0)

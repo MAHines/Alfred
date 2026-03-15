@@ -54,7 +54,7 @@ if 'gs_df' not in st.session_state:
 st.markdown('## Calculate Lab Scores for Upload to Canvas')
 
 st.write('The names of the pre- and post-lab assignments in Gradescope must start with the same word as in Canvas.')
-st.write('That starting word must unique to the lab.)
+st.write('That starting word must unique to the lab.')
 st.write('The pre- and post-lab assignments have "pre-lab" and "post-lab" in the assignment names.')
 
 st.button("Reset or work on a different course.", 
