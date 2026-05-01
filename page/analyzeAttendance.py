@@ -295,7 +295,7 @@ def sectionDateTimes(section, week, addHrs):
 
     # Find date, start and end times
     split_week = week.split('/')
-    theDate = date(2026, int(split_week[0]), int(split_week[1]) + dayOffset(section))
+    theDate = datetime(2026, int(split_week[0]), int(split_week[1])) + timedelta(days=dayOffset(section))
     if 'AM' in section:
         theTime = time(8, 00)
     else:
