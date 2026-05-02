@@ -294,8 +294,8 @@ def dayOffset(section):
 def sectionDateTimes(section, week, addHrs):
 
     # Find date, start and end times
-    split_week = week.split('/')
-    theDate = datetime(2026, int(split_week[0]), int(split_week[1])) + timedelta(days=dayOffset(section))
+    split_week = week.split('/')    # Week is something like 4/27
+    theDate = datetime(2026, int(split_week[0]), int(split_week[1])) + timedelta(days=dayOffset(section)) # Bug fix 5/1/26
     if 'AM' in section:
         theTime = time(8, 00)
     else:
@@ -308,6 +308,7 @@ def prepare_plot(df, TA, section, week, enroll_df):
     
     """ Produces a plot of students vs time for a specific section """
     plot_df = df[(df['dayTA'] == TA) & (df['sectionAttended'] == section) & (df['week'] == week)].reset_index()
+    plot_df = plot_df.dropna(subset=['time']) # Drops missing times for compatibility with plotly express
     
     # Get enrollment of section
     result_series = enroll_df.loc[(enroll_df['TA'] == TA) & (enroll_df['sectionAssigned'] == section), 'Count']
