@@ -275,7 +275,7 @@ if 'uploaded_file_data' not in ss:
 if 'probNameList' not in ss:
     ss.probNameList = [' All']
 if 'analysis_name' not in ss:
-    ss['analysis_name'] = 'Analyze Exported Evaluations'
+    ss['analysis_name'] = 'Analyze Exported Evaluations from Gradescope'
 if 'current_problem' not in ss:
     ss['current_problem'] = 'Analysis of All Problems'
 if 'include_zeroes' not in ss:

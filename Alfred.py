@@ -21,7 +21,8 @@ pg = st.navigation({
     ],
     "Scripts": [
         st.Page('page/analyzeAttendance.py', title='Analyze Attendance'),
-        st.Page('page/analyzeGradescopeFolder.py', title='Analyze Grades'),
+        st.Page('page/analyzeGradescopeFolder.py', title='Analyze Gradescope Folder'),
+        st.Page('page/calculateFinalGrades.py', title = 'Calculate/Estimate Final Grades'),
         st.Page('page/combinePSscores_Pearson.py', title='Combine PS Scores'),
         st.Page('page/combinePreAndPostLabs_Streamlit.py', title = 'Combine Lab Scores'),
         st.Page('page/getSimilarities.py', title = 'Get Turnitin Similarities'),

@@ -16,6 +16,20 @@ This module analyzes grading stored in a folder of Gradescope scores for an assi
 
 To perform the analysis, open the assignment in Gradescope and select "Export Evaluations" at the bottom of the page. Drag the resulting folder from your Downloads folder onto "Drag and drop files here." Give the analysis a name in the modal dialog. An analysis of all problems will appear. To analyze a single problem, use the dropdown menu in the sidebar to select it.
 
+## Calculate/Estimate Final Grades
+
+This module calculates/estimates final grades using standard or 'z scoring.' This is described in detail [on Wikipedia](https://en.wikipedia.org/wiki/Standard_score). The z score can be calculated with respect to the median grade (default) or the mean.
+
+The user first enters a few parameters for the calculation. A Canvas gradebook csv is then loaded. The user is then prompted to categorize each grade by assignment type (e.g., Problem Set, Prelim, Final, Lab, User1, User2). Uncategorized grades are not included in the average. The rubric (weighting) of each assignment type is then entered. There is an option to set blank values to zero for each type of assignment. (The best practice would be to do this in Canvas before downloading the grades.) Grades of 'EX' (or any other text) are treated as excused absences.
+
+The assignment classification interface is shown below.
+
+<div align="center">
+    <img src="assets/Assignment_classification.png" alt="Sample assignment classification" style="width: 85%;">
+</div>
+
+After these data are entered, grades can be calculated and downloaded to a csv. 
+
 ## Combine PS Scores
 
 This module combines problem set (PS) scores from Gradescope and Pearson using the weighting defined in Settings, then prepares a csv for upload to Canvas.  
