@@ -182,27 +182,28 @@ def histogram_scores():
         autobinx = False # Disable automatic binning to use custom settings
     ))
 
-    grades_letter = ['A+','A','A-', 'B+','B','B-','C+','C','C-', 'D/F']
-    grades_cutoffGPA = [4.15, 3.85, 3.5, 3.15, 2.85, 2.5, 2.15, 1.85, 1.5, 0]
-    
-    major_cutoff_gpas = [3.5, 2.5, 1.5]
-    minor_cutoff_gpas = [4.15, 3.85, 3.15, 2.85, 2.15, 1.85]
-    major_cutoffs = [cutoffAverage(gpa) for gpa in major_cutoff_gpas]
-    minor_cutoffs = [cutoffAverage(gpa) for gpa in minor_cutoff_gpas]
-    for x_pos in major_cutoffs:
-        fig.add_vline(
-            x=x_pos, 
-            line_width=2, 
-            line_dash="dash", 
-            line_color="black"
-        )
-    for x_pos in minor_cutoffs:
-        fig.add_vline(
-            x=x_pos, 
-            line_width=2, 
-            line_dash="dash", 
-            line_color="red"
-        )
+    if ss.median_grade > 0:
+        grades_letter = ['A+','A','A-', 'B+','B','B-','C+','C','C-', 'D/F']
+        grades_cutoffGPA = [4.15, 3.85, 3.5, 3.15, 2.85, 2.5, 2.15, 1.85, 1.5, 0]
+        
+        major_cutoff_gpas = [3.5, 2.5, 1.5]
+        minor_cutoff_gpas = [4.15, 3.85, 3.15, 2.85, 2.15, 1.85]
+        major_cutoffs = [cutoffAverage(gpa) for gpa in major_cutoff_gpas]
+        minor_cutoffs = [cutoffAverage(gpa) for gpa in minor_cutoff_gpas]
+        for x_pos in major_cutoffs:
+            fig.add_vline(
+                x=x_pos, 
+                line_width=2, 
+                line_dash="dash", 
+                line_color="black"
+            )
+        for x_pos in minor_cutoffs:
+            fig.add_vline(
+                x=x_pos, 
+                line_width=2, 
+                line_dash="dash", 
+                line_color="red"
+            )
 
     # Customize the layout (optional)
     fig.update_xaxes(title_text = 'Weighted Grade (σ)', 
