@@ -37,8 +37,8 @@ def handle_course_change():
     """ Handles course selection change drop down """
     selected_course = ss['selected_course']
     
-    if ss['last_selected_course'] != selected_course:  # Changed value
-        ss['last_selected_course'] = selected_course
+    if ss['last_selected_course2'] != selected_course:  # Changed value
+        ss['last_selected_course2'] = selected_course
         ss['selected_assignment'] = 'None selected'
         if selected_course != 'None selected': # Need to update assignment list
             ss['assignment_dict'] = getAssignmentDict()
@@ -100,9 +100,9 @@ def getCourseDict(onlyThisTerm = True):
     return course_dict
     
 def getAssignmentDict():
-    """ Returns a dict of assignments for course id ss['course_dict'][ss['last_selected_course_index']] """
+    """ Returns a dict of assignments for course id ss['course_dict'][ss['last_selected_course2_index']] """
 
-    course_id = ss['course_dict'][ss['last_selected_course']]
+    course_id = ss['course_dict'][ss['last_selected_course2']]
     course = ss['canvas'].get_course(course_id)
     assignments = course.get_assignments()
     
@@ -158,7 +158,7 @@ def getSimilarity(course_id, assignment_id, student_id): # Canvas ID, not CUID
 def getAllSimilarities():
     """ Walks through the students in the Gradebook, querying for a Turnitin report"""
     cnv_df = ss['cnv_df']
-    course_id = ss['course_dict'][ss['last_selected_course']]
+    course_id = ss['course_dict'][ss['last_selected_course2']]
     assignment_id = ss['assignment_dict'][ss['selected_assignment']]
     students = len(cnv_df)
     ii = 0
@@ -181,7 +181,7 @@ def reset_uploader():
     """Function to clear the uploaded files and show the uploaders again."""
     st.session_state['cnv_df'] = None
     ss['selected_course'] = 'None selected'
-    ss['last_selected_course'] = 'None selected'    # None selected
+    ss['last_selected_course2'] = 'None selected'    # None selected
     ss['selected_assignment'] = 'None selected'
     ss.progress = 0.0
 
@@ -211,8 +211,8 @@ if 'course_dict' not in ss:
             ss['course_dict'] = course_dict
         except:
             st.error('Error contacting Canvas.')
-if 'last_selected_course' not in ss:
-    ss['last_selected_course'] = 'None selected'    # None selected
+if 'last_selected_course2' not in ss:                # 2 is for potential name collision
+    ss['last_selected_course2'] = 'None selected'    # None selected
 if 'assignment_dict' not in ss:
     ss['assignment_dict'] = {'None selected': 0}
 if 'selected_assignment' not in ss:
@@ -255,7 +255,7 @@ if ss['auth_token'] != 'No token':
         on_change = handle_assignment_change
     )
     
-    course_id = ss['course_dict'][ss['last_selected_course']]
+    course_id = ss['course_dict'][ss['last_selected_course2']]
     assignment_id = ss['assignment_dict'][ss['selected_assignment']]
     if (ss['cnv_df'] is not None and course_id > 0 and assignment_id > 0 and ss['progress'] < 0.99):
         

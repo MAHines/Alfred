@@ -6,6 +6,7 @@
 #                        calcRoster_df, produced by analyzeAttendance, is inferred from the attendance data
 
 import streamlit as st
+from streamlit import session_state as ss
 import pandas as pd
 import utils
 import re
@@ -16,9 +17,9 @@ def read_Alfred_roster():
     
         readRoster_df: ID, netID, studentName, section
     """
-    if st.session_state['selected_course'] != 'None selected':
-        st.session_state['rosterSheetName'] = st.session_state['selected_course'] + '_Roster'
-        st.session_state['sectionsSheetName'] = st.session_state['selected_course'] + '_Sections'
+    if ss['selected_course'] != 'None selected':
+        ss['rosterSheetName'] = ss['selected_course'] + '_Roster'
+        ss['sectionsSheetName'] = ss['selected_course'] + '_Sections'
         
         error, readRoster_df = utils.read_roster_sheet()
         if error < 0:
@@ -28,11 +29,11 @@ def read_Alfred_roster():
         if error < 0:
             return -1
             
-        st.session_state['sections_df'] = sections_df
-        st.session_state['readRoster_df'] = readRoster_df
-        st.session_state['cur_roster'] = st.session_state['selected_course']
-        st.session_state['last_selected_course'] = st.session_state['selected_course']
-    st.session_state['selected_course'] = 'None selected'
+        ss['sections_df'] = sections_df
+        ss['readRoster_df'] = readRoster_df
+        ss['cur_roster'] = ss['selected_course']
+        ss['last_selected_course'] = ss['selected_course']
+    ss['selected_course'] = 'None selected'
     return 0
 
 def read_sections_sheet():
@@ -42,7 +43,7 @@ def read_sections_sheet():
     """
 
     try:
-        data = utils.read_google_sheet_with_retry(st.session_state['sectionsSheetName'], 'sections')
+        data = utils.read_google_sheet_with_retry(ss['sectionsSheetName'], 'sections')
     except Exception as e:
         st.error(f'Failed after retries (likely wifi issue):: {e}')
         return -1, None
@@ -53,62 +54,61 @@ def read_sections_sheet():
     return 0, sections_df        
 
 def add_new_enrollees():
-    new_enrollees_df = st.session_state['new_enrollees_df']
+    new_enrollees_df = ss['new_enrollees_df']
     
     for row in new_enrollees_df.itertuples(index=False):
-        utils.append_row_to_google_sheet(st.session_state['rosterSheetName'], list(row))
+        utils.append_row_to_google_sheet(ss['rosterSheetName'], list(row))
 
 def reset_uploader():
     """Function to clear the uploaded file data and show the uploader again."""
-    st.session_state['canvas_df'] = None
-    st.session_state['readRoster_df'] = None
-    st.session_state['sections_df'] = None
-    st.session_state['new_enrollees_df'] = None
-    st.session_state['switched_df'] = None
-    st.session_state['last_selected_course'] = st.session_state['course_select_list'][0]
-    st.session_state['cur_roster'] = ''
+    ss['canvas_df'] = None
+    ss['readRoster_df'] = None
+    ss['sections_df'] = None
+    ss['new_enrollees_df'] = None
+    ss['switched_df'] = None
+    ss['last_selected_course'] = ss['course_select_list'][0]
+    ss['cur_roster'] = ''
     
 def update_roster_title_str():
-    st.session_state['roster_title_str'] = '# Update ' + st.session_state['cur_roster'].replace("_", " ") + ' Roster'
-    rosterTitleContainer.write(st.session_state['roster_title_str'])
+    ss['roster_title_str'] = '# Update ' + ss['cur_roster'].replace("_", " ") + ' Roster'
+    rosterTitleContainer.write(ss['roster_title_str'])
 
 # Initialization 
-if 'canvas_df' not in st.session_state:
-    st.session_state['canvas_df'] = None
-if 'readRoster_df' not in st.session_state:
-    st.session_state['readRoster_df'] = None
-if 'sections_df' not in st.session_state:
-    st.session_state['sections_df'] = None
-if 'new_enrollees_df' not in st.session_state:
-    st.session_state['new_enrollees_df'] = None
-if 'switched_df' not in st.session_state:
-    st.session_state['switched_df'] = None
-if 'toml_dict' not in st.session_state:
-    utils.read_prefs()
-if 'display_ready' not in st.session_state: # Used by analyzeAttendance.py
-    st.session_state['display_ready'] = False
-if 'cur_roster' not in st.session_state:
-    st.session_state['cur_roster'] = ''
+keys = ['canvas_df', 'readRoster_df', 'sections_df', 'new_enrollees_df', 'switched_df']
+for key in keys:
+    ss.setdefault(key, None)
 
-utils.init_course_select_list()  # Initiates st.session_state['course_select_list'] and st.session_state['last_selected_course']
+if 'toml_dict' not in ss:
+    utils.read_prefs()
+if 'display_ready' not in ss: # Used by analyzeAttendance.py
+    ss['display_ready'] = False
+if 'cur_roster' not in ss:
+    ss['cur_roster'] = ''
+
+utils.init_course_select_list()  # Initiates ss['course_select_list'] and ss['last_selected_course']
 
 rosterTitleContainer = st.container(border = False)
+
+text_str = 'This module compare the current Canvas roster, as given by the Canvas gradebook, '
+text_str += 'with the current Alfred roster, which is read from the shared Google sheet. The script '
+text_str += 'then adds any new enrollees to the Alfred roster upon request.'
+st.write(text_str)
 
 st.button("Work on a different course.", 
             on_click=reset_uploader,
             type = 'primary')
 
-if st.session_state['sections_df'] is None: # Note that analyzeAttendance.py does not load this df
+if ss['sections_df'] is None: # Note that analyzeAttendance.py does not load this df
     st.selectbox(
         'Course to be updated', # Label for the dropdown
-        st.session_state['course_select_list'],                         # The options to display
+        ss['course_select_list'],                         # The options to display
         index = 0,              # Always start at none selected,
         key = 'selected_course',
         on_change = read_Alfred_roster
     )
     
 # Logic to display the Canvas gradebook file uploader
-if st.session_state['canvas_df'] is None:
+if ss['canvas_df'] is None:
     # Display the uploader only if no file has been uploaded yet
     st.file_uploader(
         "Upload Canvas gradebook here:",
@@ -121,11 +121,11 @@ else:
     st.write('### Canvas gradebook already uploaded')
 
 # The actual calculation is performed when all of the df's have been loaded. No other action needed.
-if all(v is not None for v in [st.session_state['canvas_df'],st.session_state['readRoster_df']]):
+if all(v is not None for v in [ss['canvas_df'],ss['readRoster_df']]):
     
-    canvas_df = st.session_state['canvas_df']
-    sections_df = st.session_state['sections_df']
-    readRoster_df = st.session_state['readRoster_df']
+    canvas_df = ss['canvas_df']
+    sections_df = ss['sections_df']
+    readRoster_df = ss['readRoster_df']
     mapSeries_sectionNumber_to_section = sections_df.set_index('sectionNumber')['section']
     canvas_df['section'] = canvas_df['sectionNumber'].astype('string').map(mapSeries_sectionNumber_to_section)
     
@@ -135,7 +135,7 @@ if all(v is not None for v in [st.session_state['canvas_df'],st.session_state['r
     
     st.write('# Newly Enrolled Students')
     st.dataframe(new_enrollees_df)
-    st.session_state['new_enrollees_df'] = new_enrollees_df
+    ss['new_enrollees_df'] = new_enrollees_df
     if len(new_enrollees_df) > 0:
         st.button('Update Alfred',
                     on_click = add_new_enrollees,
@@ -160,20 +160,20 @@ if all(v is not None for v in [st.session_state['canvas_df'],st.session_state['r
     switched_df = switched_df[['ID', 'netID', 'studentName', 'section', 'oldSection']]
     st.write('# Switched Sections')
     st.dataframe(switched_df)
-    st.session_state['switched_df'] = 'switched_df'
+    ss['switched_df'] = 'switched_df'
     
 
-# if st.session_state['canvas_df'] is not None:
+# if ss['canvas_df'] is not None:
 #     st.write('# Canvas Roster')
-#     st.dataframe(st.session_state['canvas_df'])
+#     st.dataframe(ss['canvas_df'])
 # 
-# if st.session_state['readRoster_df'] is not None:
+# if ss['readRoster_df'] is not None:
 #     st.write('# Alfred Roster')
-#     st.dataframe(st.session_state['readRoster_df'])
+#     st.dataframe(ss['readRoster_df'])
 #     
-# if st.session_state['sections_df'] is not None:
+# if ss['sections_df'] is not None:
 #     st.write('# Sections')
-#     st.dataframe(st.session_state['sections_df'])
+#     st.dataframe(ss['sections_df'])
 
 update_roster_title_str()
 utils.shared_sidebar()
