@@ -28,7 +28,13 @@ The assignment classification interface is shown below.
     <img src="assets/Assignment_classification.png" alt="Sample assignment classification" style="width: 85%;">
 </div>
 
-After these data are entered, grades can be calculated and downloaded to a csv. 
+After these data are entered, grades are calculated using the departmental grade distribution as a first shot. The user can then tweak the grade cutoffs while monitoring the grade distribution and statistics. The grade cutoffs are visualized as vertical solid lines, as shown below. The dashed lines represent the departmental suggested cutoffs (if different from the user cutoffs.)
+
+<div align="center">
+    <img src="assets/Grade_Distribution_w_cutoffs.png" alt="Grade distribution with grade cutoffs" style="width: 85%;">
+</div>
+
+Once the user is satisfied with the cutoffs, all of the data (updated gradebook, grade cutoffs, grade statistics, and grade histogram) are saved to separate sheets in a .xslx file.
 
 ## Combine PS Scores
 

@@ -9,13 +9,17 @@ import utils
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-
+import io
 
 def reset_uploader():
     """Function to clear the uploaded file data and show the uploader again."""
     ss['canvasGrades_df'] = None
     ss.assignments_df = None
+    ss.cutoff_df = None
+    ss.grade_stats_df = None
     ss.categorized = False
+    ss.grades_calculated = False
+    ss.num_bins = 20
 
 def read_canvas_csv():
     """ Reads the grades from a Canvas csv, producing 3 dataframes
@@ -125,6 +129,7 @@ def calc_grades():
     
     # Calculate weighted average of categories
     ss.canvasGrades_df['Grade'] = ''
+    ss.canvasGrades_df['numGrade'] = None
     
     # If the final grade is present
     ss.canvasGrades_df.loc[ss.canvasGrades_df['INC'] == False, 'Wt Avg'] = (
@@ -145,19 +150,42 @@ def calc_grades():
     ss.canvasGrades_df.loc[ss.canvasGrades_df['INC'] == True, 'Grade'] = 'INC'
 
     # Calculate each student's percentile (rank), then use to calculate department recommended grade
-    ss.canvasGrades_df['Percentile'] = ss.canvasGrades_df['Wt Avg'].rank(pct=True)
-    ss.canvasGrades_df['Est Grade'] = ss.canvasGrades_df['Percentile'].apply(get_grade)
-    ss.canvasGrades_df = ss.canvasGrades_df.sort_values(by='Percentile', ascending=False)
+    ss.canvasGrades_df['Pctile'] = ss.canvasGrades_df['Wt Avg'].rank(pct=True)
+    ss.canvasGrades_df['Est Grade'] = ss.canvasGrades_df['Pctile'].apply(get_grade)
+    ss.canvasGrades_df = ss.canvasGrades_df.sort_values(by='Pctile', ascending=False)
+    
+    # Initialize the cutoff_df
+    if ss.median_grade > 0:
+        initialize_cutoff_df()
+        fill_grades_from_cutoffs()
+    else:
+        st.error('You need to select a course / grade median!')
     
     # Sort the columns in a readable way
-    sort_order = ['Student', 'SIS User ID', 'SIS Login ID', 'Notes', 'Grade', 'Est Grade', 'Percentile',
+    sort_order = ['Student', 'SIS User ID', 'SIS Login ID', 'Notes', 'Grade', 'numGrade', 'Est Grade', 'Pctile',
                     'Wt Avg', 'Final_avg', 'Prelims_avg', 'Labs_avg', 'PSs_avg', 
                     'User1_avg', 'User2_avg', 'INC']
     additional_cols = [col for col in ss.canvasGrades_df.columns if col not in sort_order]
     sort_order += additional_cols
     ss.canvasGrades_df = ss.canvasGrades_df[sort_order]
     
+    calculate_grade_stats_df()
     ss.grades_calculated = True
+    
+def initialize_cutoff_df():
+
+    grades_letter = ['A/A+','A-/A','B+/A-', 'B/B+','B-/B','C+/B-','C/C+','C-/C','D/C-', 'F/D']
+    grades_cutoffGPA = [4.15, 3.85, 3.5, 3.15, 2.85, 2.5, 2.15, 1.85, 1.5, 0] # lowest gpa for grade
+    grade_cutoffs = [cutoffAverage(gpa) for gpa in grades_cutoffGPA]
+    data = [grades_cutoffGPA, grade_cutoffs, grade_cutoffs]
+    row_names = ['cutoffGPA', 'dept_cutoffs', 'my_cutoffs']
+    
+    cutoff_df = pd.DataFrame(data, columns = grades_letter)
+    cutoff_df = cutoff_df.apply(pd.to_numeric, errors='coerce')
+    
+    cutoff_df['Type'] = row_names
+    cutoff_df = cutoff_df.iloc[:, ::-1]   # Reverse order of columns
+    ss.cutoff_df = cutoff_df
     
 def histogram_scores():
     """ Prepare the histogram """
@@ -183,26 +211,53 @@ def histogram_scores():
     ))
 
     if ss.median_grade > 0:
-        grades_letter = ['A+','A','A-', 'B+','B','B-','C+','C','C-', 'D/F']
-        grades_cutoffGPA = [4.15, 3.85, 3.5, 3.15, 2.85, 2.5, 2.15, 1.85, 1.5, 0]
         
-        major_cutoff_gpas = [3.5, 2.5, 1.5]
-        minor_cutoff_gpas = [4.15, 3.85, 3.15, 2.85, 2.15, 1.85]
-        major_cutoffs = [cutoffAverage(gpa) for gpa in major_cutoff_gpas]
-        minor_cutoffs = [cutoffAverage(gpa) for gpa in minor_cutoff_gpas]
-        for x_pos in major_cutoffs:
+        # Dashed vertical lines for departmental cutoffs
+        major_dept_cutoffs = [ss.cutoff_df['D/C-'][1], ss.cutoff_df['C+/B-'][1], ss.cutoff_df['B+/A-'][1]]
+        minor_dept_cutoffs = [ss.cutoff_df['C-/C'][1], ss.cutoff_df['C/C+'][1],
+                                ss.cutoff_df['B-/B'][1], ss.cutoff_df['B/B+'][1],
+                                ss.cutoff_df['A-/A'][1], ss.cutoff_df['A/A+'][1]]
+        for x_pos in major_dept_cutoffs:
             fig.add_vline(
                 x=x_pos, 
                 line_width=2, 
                 line_dash="dash", 
                 line_color="black"
             )
-        for x_pos in minor_cutoffs:
+        for x_pos in minor_dept_cutoffs:
             fig.add_vline(
                 x=x_pos, 
                 line_width=2, 
                 line_dash="dash", 
                 line_color="red"
+            )
+
+        # Solid vertical lines for departmental cutoffs
+        major_labels = ['F/D', 'D/C-', 'C+/B-', 'B+/A-']
+        major_my_cutoffs = [ss.cutoff_df['F/D'][2], ss.cutoff_df['D/C-'][2], ss.cutoff_df['C+/B-'][2], ss.cutoff_df['B+/A-'][2]]
+        minor_labels = ['C-/C', 'C/C+', 'B-/B', 'B/B+', 'A-/A', 'A/A+']
+        minor_my_cutoffs = [ss.cutoff_df['C-/C'][2], ss.cutoff_df['C/C+'][2],
+                                ss.cutoff_df['B-/B'][2], ss.cutoff_df['B/B+'][2],
+                                ss.cutoff_df['A-/A'][2], ss.cutoff_df['A/A+'][2]]
+        for x_pos, label in zip(major_my_cutoffs, major_labels):
+            fig.add_vline(
+                x=x_pos, 
+                line_width=2, 
+                line_color="black",
+                annotation_text = label,
+                annotation_position = 'top',
+                annotation_font_size = 15,
+                annotation_yshift = 8
+            )
+        for x_pos, label in zip(minor_my_cutoffs, minor_labels):
+            fig.add_vline(
+                x=x_pos, 
+                line_width=2, 
+                line_color="red",
+                annotation_text = label,
+                annotation_position = 'top',
+                annotation_font_size = 15,
+                annotation_yshift = 8
             )
 
     # Customize the layout (optional)
@@ -234,14 +289,28 @@ def histogram_scores():
     
     return fig
 
+def numGrade(letterGrade):
+    """Function that returns the gpa equivalent of letterGrade """
+    grading_scale = {
+        'A+': 4.3, 'A': 4.0, 'A-': 3.7,
+        'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+        'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+        'D+': 1.3, 'D': 1.0, 'F': 0.0
+    }
+    
+    return grading_scale.get(letterGrade.upper())
+
 def cutoffAverage(gpa):
     """Function that returns the cutoff weighted average for a given gpa"""
     
-    percentile = cutoffPercentile(gpa)
-    closest_idx = (ss.canvasGrades_df['Percentile'] - percentile).abs().idxmin()
+    if gpa < 0:
+        return ss.canvasGrades_df['Wt Avg'].min()
+        
+    percentile = cutoffPctile(gpa)
+    closest_idx = (ss.canvasGrades_df['Pctile'] - percentile).abs().idxmin()
     return ss.canvasGrades_df.loc[closest_idx, 'Wt Avg']
 
-def cutoffPercentile(gpa):
+def cutoffPctile(gpa):
     """Function derived from departmental distributions for median = 2.8, 2.9, 3.0, and 3.3."""
 
     medianGPA = ss['median_grade']
@@ -251,13 +320,27 @@ def cutoffPercentile(gpa):
     else:
         return float('nan')
     
+def grade_from_cutoff_df(weighted_grade, row):
+    """ Returns letter grade for weighted_grade calculated from cutoff_df.
+        row = 'my_cutoffs' or 'dept_cutoffs'
+    """
+
+    irow = 2 if row == 'my_cutoffs' else 1
+    
+    # Data in last 10 columns
+    mask = ss.cutoff_df.iloc[irow][-10:].astype(float) < weighted_grade
+    if mask.any():
+        letter = mask[::-1].idxmax().split('/')[-1]
+        return letter
+    return "F" # Default if no cutoffs are met
+    
 def initialize_cutoffs():
     """ Calculate the cutoff percentile for each letter grade """
    
     grades_letter = ['A+','A','A-', 'B+','B','B-','C+','C','C-', 'D/F']
     grades_cutoffGPA = [4.15, 3.85, 3.5, 3.15, 2.85, 2.5, 2.15, 1.85, 1.5, 0]
-    grades_cutoffPercentile = [cutoffPercentile(gpa) for gpa in grades_cutoffGPA]
-    ss.thresholds = sorted(zip(grades_cutoffPercentile, grades_letter), reverse = True)
+    grades_cutoffPctile = [cutoffPctile(gpa) for gpa in grades_cutoffGPA]
+    ss.thresholds = sorted(zip(grades_cutoffPctile, grades_letter), reverse = True)
     
 def get_grade(percentile):
     """ Returns department recommended grade for each percentile. If ss.median_grade < 0,
@@ -271,6 +354,36 @@ def get_grade(percentile):
         if percentile >= cutoff:
             return grade
 
+def fill_grades_from_cutoffs():
+    """ Fill Grade and numGrade columns from cutoff values, respecting INCs """
+    
+    ss.canvasGrades_df.loc[ss.canvasGrades_df['Grade'] != 'INC', 'Grade' ] =(
+        ss.canvasGrades_df['Wt Avg'].apply(grade_from_cutoff_df, args =('my_cutoffs',)))
+    ss.canvasGrades_df.loc[ss.canvasGrades_df['Grade'] != 'INC', 'numGrade' ] =(
+        ss.canvasGrades_df['Grade'].apply(numGrade))
+
+def calculate_grade_stats_df():
+
+    grades = ['A+','A','A-', 'B+','B','B-','C+','C','C-', 'D', 'F', 'INC']
+    grade_stats_df = pd.DataFrame(grades, columns = ['Type'])
+    grade_stats_df = grade_stats_df.set_index('Type')
+    
+    # Calculate stats in user Grades
+    counts = ss.canvasGrades_df['Grade'].value_counts(normalize=True)
+    grade_stats_df['My Pct'] = grade_stats_df.index.map(counts).fillna(0)
+    
+    # Calculate stats in dept Grades
+    counts = ss.canvasGrades_df['Est Grade'].value_counts(normalize=True)
+    grade_stats_df['Dept Pct'] = grade_stats_df.index.map(counts).fillna(0)
+    pct_DF = (ss.canvasGrades_df['Est Grade'] == 'D/F').mean()
+    grade_stats_df.loc['D', 'Dept Pct'] = pct_DF
+    grade_stats_df = grade_stats_df.reset_index()
+    grade_stats_df['My Cum Pct'] = grade_stats_df['My Pct'].cumsum()
+    grade_stats_df['Dept Cum Pct'] = grade_stats_df['Dept Pct'].cumsum()
+
+    ss.grade_stats_df = grade_stats_df
+    grade_stats_df
+    
 def handle_median_change():
     """ Callback function that handles change in selected course / median """
 
@@ -296,7 +409,7 @@ def handle_num_bins():
     ss.num_bins = ss.num_bins_key
 
 # Initialization 
-keys = ['canvasGrades_df', 'assignments_df', 'rubric_df', 'subZeroes_df', 'thresholds']
+keys = ['canvasGrades_df', 'assignments_df', 'rubric_df', 'subZeroes_df', 'cutoff_df', 'grade_stats_df', 'thresholds']
 for key in keys:
     ss.setdefault(key, None)
 
@@ -413,7 +526,6 @@ else:
             edited_rubric_df = edited_rubric_df.div(edited_rubric_df.sum(axis=1), axis=0) # Normalize rubric
             ss.rubric_df = edited_rubric_df
             ss.subZeroes_df = edited_subZeroes_df
-            st.success("Assignments categorized ard rubric entered!")
             ss.categorized = True
             check_for_missing_grades()
             st.rerun()
@@ -426,9 +538,10 @@ else:
             
     if ss.grades_calculated:
         st.write('#### Histogram')
-        text_str = 'The vertical black lines represent the estimated C–/D, B–/C+, and A–/B+ cutoffs. '
-        text_str += 'The vertical red lines represent the estimated G–/G and G/G+ borders for '
-        text_str += 'G = [A, B, C].'
+        text_str = 'The vertical solid lines represent your cutoffs, whereas the vertical dashed '
+        text_str += 'lines represent the departmental recommendations. The latter may be covered up '
+        text_str += 'by the former. Major boundaries are black; minor boundaries are red. The department '
+        text_str += 'is silent on the D/F boundary.'
         st.write(text_str)
         
         fig = histogram_scores()
@@ -445,16 +558,67 @@ else:
                             key = 'num_bins_key',
                             on_change = handle_num_bins
                             )
-
+        
+        # Displays editable df to tweak cutoffs
+        with st.form("cutoff_edit_form"):
+            st.write('#### Edit the last row to shift grade cutoffs, then click Change Cutoffs.')
+            
+            edited_cutoff_df = st.data_editor(ss.cutoff_df,
+                                                num_rows = 'static',
+                                                hide_index = True)
+            
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                submitCutoffs = st.form_submit_button('Change Cutoffs',
+                                                        type = 'primary')
+                if submitCutoffs:
+                    my_cutoff_values = edited_cutoff_df.iloc[-1, -10:]
+                    is_ascending = my_cutoff_values.is_monotonic_increasing
+                    if is_ascending:
+                        ss.cutoff_df = edited_cutoff_df
+                        fill_grades_from_cutoffs()
+                        calculate_grade_stats_df()
+                        st.rerun()
+                    else:
+                        st.error('The values in the my-cutoffs row must be monotonically ascending!')
+            with col2:
+                resetCutoffs = st.form_submit_button('Reset Cutoffs',
+                                                        type = 'primary')
+                if resetCutoffs:
+                    initialize_cutoff_df()
+                    edited_cutoff_df = ss.cutoff_df 
+                    st.rerun()
+    
+        st.write('#### Grade Statistics')
+        curMedianGPA = ss.canvasGrades_df['numGrade'].median()
+        curMeanGPA = ss.canvasGrades_df['numGrade'].mean()
+        st.write(f'Median GPA = {curMedianGPA}; Mean GPA = {curMeanGPA:.2f}')
+        text_str = 'The department combines D & F in their recommendation. This sum is reported '
+        text_str += 'in the D row below.'
+        st.write(text_str)
+        st.dataframe(ss.grade_stats_df,
+                        hide_index = 'True')
+        
+        st.write('#### Updated Gradebook')
         st.dataframe(ss.canvasGrades_df,
                         hide_index = 'True')
 
-        grades_data = ss.canvasGrades_df.to_csv(index = False, header = True).encode('utf-8')
-        st.download_button(label = 'Save Grades as csv',
-            data = grades_data,
-            file_name = 'Grades.csv',
-            mime = 'text/csv',
-            type = 'primary')
-
+        if st.button('Download Gradebook to Excel', type = 'primary'):
+            # in-memory buffer for image
+            buffer = io.BytesIO()    
+            fig.write_image(file = buffer, format = "png")
+            buffer.seek(0)
+            fileName = Path.home() / 'Downloads' / 'Final Grades.xlsx'
+            with pd.ExcelWriter(fileName, mode = 'w', engine = 'xlsxwriter') as writer:
+                # Write the different dataframes to different worksheets
+                ss.canvasGrades_df.to_excel(writer, sheet_name = 'Grades', index = False)
+                ss.cutoff_df.to_excel(writer, sheet_name = 'Cutoffs', index = False)
+                ss.grade_stats_df.to_excel(writer, sheet_name = 'Statistics', index = False)
+                workbook = writer.book
+                worksheet = workbook.add_worksheet('Graph')
+                worksheet.insert_image('B2', 'plot.png', {'image_data': buffer})
+        st.write('The Gradebook will be saved to multiple sheets of an Excel file in ~/Downloads.')
+                
 utils.shared_sidebar()
             
