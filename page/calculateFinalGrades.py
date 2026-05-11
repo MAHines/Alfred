@@ -609,7 +609,7 @@ else:
             buffer = io.BytesIO()    
             fig.write_image(file = buffer, format = "png")
             buffer.seek(0)
-            fileName = Path.home() / 'Downloads' / 'Final Grades.xlsx'
+            fileName = Path.home() / 'Downloads' / f"Final Grades_{datetime.now().strftime('%b_%d')}.xlsx"
             with pd.ExcelWriter(fileName, mode = 'w', engine = 'xlsxwriter') as writer:
                 # Write the different dataframes to different worksheets
                 ss.canvasGrades_df.to_excel(writer, sheet_name = 'Grades', index = False)
