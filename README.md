@@ -62,8 +62,12 @@ _Note:_ This script preserves any 'EX' entries in the Canvas gradebook. No grade
 
 ## Get Turnitin Similarities  
 
-This module queries Canvas for all of the Turnitin similarity scores for a single assignment using the current Canvas gradebook. The scores are output in a csv.  
+This module queries Canvas for all of the Turnitin similarity scores for a single assignment using the current Canvas gradebook. The scores are output in a csv that includes a link each student’s Turnitin report as shown below.
 
+<div align="center">
+    <img src="assets/Similarity_report.png" alt="Grade distribution with grade cutoffs" style="width: 85%;">
+</div>
+  
 This module requires:  
 &emsp;– a Canvas token be stored via Settings, and   
 &emsp;– the base URL of the Canvas instance be set in Settings.

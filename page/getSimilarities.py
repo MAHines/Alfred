@@ -270,6 +270,7 @@ if ss['auth_token'] != 'No token':
     if ss['cnv_df'] is not None and ss['progress'] > 0.98:
         st.markdown('## Similarity Report') 
         st.dataframe(st.session_state['cnv_df'],
+                    hide_index = True,
                     column_config={'turnitin_report': st.column_config.LinkColumn(
                     "Turnitin Link",
                     display_text="Click for report"
