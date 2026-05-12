@@ -78,6 +78,12 @@ This module produces a histogram of grades from a Gradescope csv and optionally 
 
 ![Sample histogram](assets/Histogram.png "Sample Histogram with Estimated Grades")
 
+## Transfer Grades to Faculty Center Roster
+
+This module reads an Excel file containing (at least) a column of Cornell IDs / SIS User IDs and assigned letter grades on the same sheet. The Excel file can contain many more columns (_e.g.,_ all of your grade calculations) and many other sheets. The module then reads your Faculty Center Roster(s), which are csv's. The module copies the grades from the Excel file to the Faculty Center Roster by comparing Cornell IDs. The final combined roster is output as a csv ready for upload to Faculty Center.
+
+If you have multiple roster files, the script produces a single combined roster that Faculty Center has no problems accepting.
+
 ## Update Roster
 
 This module compare the current Canvas roster, as given by the Canvas gradebook, with the current Alfred roster, which is read from the shared Google sheet. The script then adds any new enrollees to the Alfred roster upon request.

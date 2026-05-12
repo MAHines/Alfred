@@ -27,6 +27,7 @@ pg = st.navigation({
         st.Page('page/combinePreAndPostLabs_Streamlit.py', title = 'Combine Lab Scores'),
         st.Page('page/getSimilarities.py', title = 'Get Turnitin Similarities'),
         st.Page('page/makeGradeHistogram.py', title = 'Make Histogram'),
+        st.Page('page/transferGradesToRoster.py', title = 'Transfer Grades to Faculty Center Roster'),
         st.Page('page/updateRoster.py', title='Update Roster'),
         st.Page('page/addStudentIDsToPearson.py', title='Add Student IDs to Pearson Roster'),
         st.Page('page/changePrefs.py', title='Settings'),
