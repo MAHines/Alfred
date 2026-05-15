@@ -20,6 +20,8 @@ def reset_uploader():
     ss.categorized = False
     ss.grades_calculated = False
     ss.num_bins = 20
+    ss.all_w_missing_grades = []
+    ss.noSkip = True
 
 def read_canvas_csv():
     """ Reads the grades from a Canvas csv, producing 3 dataframes
@@ -42,6 +44,9 @@ def read_canvas_csv():
         
         # Get rid of annoying Canvas numbers in assignment names
         canvasGrades_df.columns = canvasGrades_df.columns.str.replace(r'\s*\(\d+\)$', '', regex=True)
+        
+        # Make a column for skipped students
+        canvasGrades_df['NoGrade'] = False
 
         # Make the assignments_df
         assignments_df = pd.DataFrame(canvasGrades_df.columns, columns=['Assignments'])
@@ -74,6 +79,7 @@ def check_for_missing_grades():
     
     abort_script = False
     ss.canvasGrades_df['INC'] = False
+    ss.all_w_missing_grades = []
     for gradeCategory in ss.categoryList:
         gradeCategory_list = ss.assignments_df.loc[ss.assignments_df[gradeCategory] == True, 'Assignments'].tolist()
         if ss.subZeroes_df[gradeCategory][0]:
@@ -90,10 +96,11 @@ def check_for_missing_grades():
                 students_with_missing_grades = ss.canvasGrades_df.loc[mask, 'Student'].tolist()
                 error_msg = f'Missing {gradeCategory} grades for {students_with_missing_grades}'
                 st.error(error_msg)
-                abort_script = True
+                #abort_script = True
+                ss.all_w_missing_grades = list(set(ss.all_w_missing_grades + students_with_missing_grades))
     
-    if abort_script:
-        st.stop()
+#     if abort_script:
+#         st.stop()
     
 def calc_grades_from_list(assignmentList):
     """ Calculates the z grade for each assignment in assignmentList, clipping result to 
@@ -128,11 +135,15 @@ def calc_grades():
                 st.error(f'Error! The weighting of {gradeCategory} is > 0, but there are no {gradeCategory} assignments. I suggest a rubric change and recalculation.')
     
     # Calculate weighted average of categories
-    ss.canvasGrades_df['Grade'] = ''
+    ss.canvasGrades_df['Grade'] = None
     ss.canvasGrades_df['numGrade'] = None
     
+    # NoGrade should trump INC
+    ss.canvasGrades_df.loc[ss.canvasGrades_df['NoGrade'] == True, 'INC'] = False
+    
     # If the final grade is present
-    ss.canvasGrades_df.loc[ss.canvasGrades_df['INC'] == False, 'Wt Avg'] = (
+    mask = (ss.canvasGrades_df['INC'] == False) & (ss.canvasGrades_df['NoGrade'] == False)
+    ss.canvasGrades_df.loc[mask, 'Wt Avg'] = (
                                     ss.rubric_df['Prelims'][0] * ss.canvasGrades_df['Prelims_avg']
                                     + ss.rubric_df['Final'][0] * ss.canvasGrades_df['Final_avg']
                                     + ss.rubric_df['Labs'][0] * ss.canvasGrades_df['Labs_avg']
@@ -141,7 +152,8 @@ def calc_grades():
                                     + ss.rubric_df['User2'][0] * ss.canvasGrades_df['User2_avg'])
     
     # Deal with missing final grades
-    ss.canvasGrades_df.loc[ss.canvasGrades_df['INC'] == True, 'Wt Avg'] = (
+    mask = (ss.canvasGrades_df['INC'] == True) & (ss.canvasGrades_df['NoGrade'] == False)
+    ss.canvasGrades_df.loc[mask, 'Wt Avg'] = (
                                     (ss.rubric_df['Prelims'][0] + ss.rubric_df['Final'][0]) * ss.canvasGrades_df['Prelims_avg']
                                     + ss.rubric_df['Labs'][0] * ss.canvasGrades_df['Labs_avg']
                                     + ss.rubric_df['PSs'][0] * ss.canvasGrades_df['PSs_avg']
@@ -150,8 +162,9 @@ def calc_grades():
     ss.canvasGrades_df.loc[ss.canvasGrades_df['INC'] == True, 'Grade'] = 'INC'
 
     # Calculate each student's percentile (rank), then use to calculate department recommended grade
-    ss.canvasGrades_df['Pctile'] = ss.canvasGrades_df['Wt Avg'].rank(pct=True)
-    ss.canvasGrades_df['Est Grade'] = ss.canvasGrades_df['Pctile'].apply(get_grade)
+    mask = ss.canvasGrades_df['NoGrade'] == False
+    ss.canvasGrades_df.loc[mask, 'Pctile'] = ss.canvasGrades_df['Wt Avg'].rank(pct=True)
+    ss.canvasGrades_df.loc[mask, 'Est Grade'] = ss.canvasGrades_df['Pctile'].apply(get_grade)
     ss.canvasGrades_df = ss.canvasGrades_df.sort_values(by='Pctile', ascending=False)
     
     # Initialize the cutoff_df
@@ -164,7 +177,7 @@ def calc_grades():
     # Sort the columns in a readable way
     sort_order = ['Student', 'SIS User ID', 'SIS Login ID', 'Notes', 'Grade', 'numGrade', 'Est Grade', 'Pctile',
                     'Wt Avg', 'Final_avg', 'Prelims_avg', 'Labs_avg', 'PSs_avg', 
-                    'User1_avg', 'User2_avg', 'INC']
+                    'User1_avg', 'User2_avg', 'INC', 'NoGrade']
     additional_cols = [col for col in ss.canvasGrades_df.columns if col not in sort_order]
     sort_order += additional_cols
     ss.canvasGrades_df = ss.canvasGrades_df[sort_order]
@@ -291,24 +304,32 @@ def histogram_scores():
 
 def numGrade(letterGrade):
     """Function that returns the gpa equivalent of letterGrade """
-    grading_scale = {
-        'A+': 4.3, 'A': 4.0, 'A-': 3.7,
-        'B+': 3.3, 'B': 3.0, 'B-': 2.7,
-        'C+': 2.3, 'C': 2.0, 'C-': 1.7,
-        'D+': 1.3, 'D': 1.0, 'F': 0.0
-    }
-    
-    return grading_scale.get(letterGrade.upper())
+    if letterGrade is not None:
+        grading_scale = {
+            'A+': 4.3, 'A': 4.0, 'A-': 3.7,
+            'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+            'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+            'D+': 1.3, 'D': 1.0, 'F': 0.0
+        }
+        
+        return grading_scale.get(letterGrade.upper())
+    else:
+        return None
 
 def cutoffAverage(gpa):
     """Function that returns the cutoff weighted average for a given gpa"""
     
-    if gpa < 0:
-        return ss.canvasGrades_df['Wt Avg'].min()
+    if gpa <= 0:
+        return ss.canvasGrades_df['Wt Avg'].min() - 0.01
         
     percentile = cutoffPctile(gpa)
-    closest_idx = (ss.canvasGrades_df['Pctile'] - percentile).abs().idxmin()
-    return ss.canvasGrades_df.loc[closest_idx, 'Wt Avg']
+    
+    # Always return a cutoff between 2 students
+    top2_idx = (ss.canvasGrades_df['Pctile'] - percentile).abs().nsmallest(2).index
+    closest = ss.canvasGrades_df.loc[top2_idx[0], 'Wt Avg']
+    next_closest = ss.canvasGrades_df.loc[top2_idx[1], 'Wt Avg']
+    avg = 0.5 * (closest + next_closest)
+    return avg
 
 def cutoffPctile(gpa):
     """Function derived from departmental distributions for median = 2.8, 2.9, 3.0, and 3.3."""
@@ -349,6 +370,8 @@ def get_grade(percentile):
 
     if ss.median_grade < 0:
         return ''
+    if percentile is None:
+        return None
         
     for cutoff, grade in ss.thresholds:
         if percentile >= cutoff:
@@ -357,9 +380,10 @@ def get_grade(percentile):
 def fill_grades_from_cutoffs():
     """ Fill Grade and numGrade columns from cutoff values, respecting INCs """
     
-    ss.canvasGrades_df.loc[ss.canvasGrades_df['Grade'] != 'INC', 'Grade' ] =(
+    mask = (ss.canvasGrades_df['NoGrade'] == False) & (ss.canvasGrades_df['INC'] == False)
+    ss.canvasGrades_df.loc[mask, 'Grade' ] =(
         ss.canvasGrades_df['Wt Avg'].apply(grade_from_cutoff_df, args =('my_cutoffs',)))
-    ss.canvasGrades_df.loc[ss.canvasGrades_df['Grade'] != 'INC', 'numGrade' ] =(
+    ss.canvasGrades_df.loc[mask, 'numGrade' ] =(
         ss.canvasGrades_df['Grade'].apply(numGrade))
 
 def calculate_grade_stats_df():
@@ -369,20 +393,28 @@ def calculate_grade_stats_df():
     grade_stats_df = grade_stats_df.set_index('Type')
     
     # Calculate stats in user Grades
+    counts = ss.canvasGrades_df['Grade'].value_counts(normalize=False)
+    grade_stats_df['My Num'] = grade_stats_df.index.map(counts).fillna(0)
     counts = ss.canvasGrades_df['Grade'].value_counts(normalize=True)
     grade_stats_df['My Pct'] = grade_stats_df.index.map(counts).fillna(0)
     
     # Calculate stats in dept Grades
+    counts = ss.canvasGrades_df['Est Grade'].value_counts(normalize=False)
+    grade_stats_df['Dept Num'] = grade_stats_df.index.map(counts).fillna(0)
     counts = ss.canvasGrades_df['Est Grade'].value_counts(normalize=True)
     grade_stats_df['Dept Pct'] = grade_stats_df.index.map(counts).fillna(0)
+    
+    # Need to count the dept D/F differently
+    num_DF = (ss.canvasGrades_df['Est Grade'] == 'D/F').sum()
+    grade_stats_df.loc['D', 'Dept Num'] = num_DF
     pct_DF = (ss.canvasGrades_df['Est Grade'] == 'D/F').mean()
     grade_stats_df.loc['D', 'Dept Pct'] = pct_DF
+    
     grade_stats_df = grade_stats_df.reset_index()
     grade_stats_df['My Cum Pct'] = grade_stats_df['My Pct'].cumsum()
     grade_stats_df['Dept Cum Pct'] = grade_stats_df['Dept Pct'].cumsum()
 
     ss.grade_stats_df = grade_stats_df
-    grade_stats_df
     
 def handle_median_change():
     """ Callback function that handles change in selected course / median """
@@ -432,6 +464,10 @@ if 'median_grade' not in ss:
     initialize_cutoffs()
 if 'num_bins' not in ss:
     ss.num_bins = 20
+if 'all_w_missing_grades' not in ss:
+    ss.all_w_missing_grades = []
+if 'noSkip' not in ss:
+    ss.noSkip = True
 
 st.title('Calculate/Estimate Final Grades')
 
@@ -526,11 +562,22 @@ else:
             edited_rubric_df = edited_rubric_df.div(edited_rubric_df.sum(axis=1), axis=0) # Normalize rubric
             ss.rubric_df = edited_rubric_df
             ss.subZeroes_df = edited_subZeroes_df
-            ss.categorized = True
             check_for_missing_grades()
-            st.rerun()
+            if len(ss.all_w_missing_grades) < 1:
+                ss.categorized = True
 
     # After the user has categorized assignments, display button to calculate grades 
+    if len(ss.all_w_missing_grades) > 0 and ss.noSkip == True:
+        if st.button('Skip students with missing grades',
+                        type = 'primary'):
+            ss.canvasGrades_df.loc[ss.canvasGrades_df['Student'].isin(ss.all_w_missing_grades), 'NoGrade'] = True
+            ss.categorized = True
+            ss.noSkip = False
+            st.rerun()
+    
+    if ss.noSkip == False:
+        st.write('Skipping missing grades. You have been warned.') 
+
     if ss.categorized:
         if st.button("Calculate Grades",
                         type = 'primary'):
@@ -601,6 +648,8 @@ else:
                         hide_index = 'True')
         
         st.write('#### Updated Gradebook')
+        text_str = 'The column \'Wt Avg\' is the weighted average grade in units of σ.'
+        st.write(text_str)
         st.dataframe(ss.canvasGrades_df,
                         hide_index = 'True')
 
