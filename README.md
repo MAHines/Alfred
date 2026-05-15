@@ -36,6 +36,10 @@ After these data are entered, grades are calculated using the departmental grade
 
 Once the user is satisfied with the cutoffs, all of the data (updated gradebook, grade cutoffs, grade statistics, and grade histogram) are saved to separate sheets in a .xslx file.
 
+_Note 1:_ Text in a grade column is presumed to be an excused absence ('EX').
+
+_Note 2:_ You may be given the option to "Skip students with missing grades." (You will be told which students have missing grades, so you should fix this if possible.) If you do skip these students, they will not have their weighted average calculated or any estimated grades. You may be able to see some component averages (_e.g.,_ Lab_avg_) if there are sufficient grades. This option is only included in case students are only completing part of the course for some very unusual reason.
+
 ## Combine PS Scores
 
 This module combines problem set (PS) scores from Gradescope and Pearson using the weighting defined in Settings, then prepares a csv for upload to Canvas.  
