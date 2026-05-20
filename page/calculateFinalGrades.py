@@ -175,9 +175,10 @@ def calc_grades():
         st.error('You need to select a course / grade median!')
     
     # Sort the columns in a readable way
-    sort_order = ['Student', 'SIS User ID', 'SIS Login ID', 'Notes', 'Grade', 'numGrade', 'Est Grade', 'Pctile',
+    base_order = ['Student', 'SIS User ID', 'SIS Login ID', 'Notes', 'Grade', 'numGrade', 'Est Grade', 'Pctile',
                     'Wt Avg', 'Final_avg', 'Prelims_avg', 'Labs_avg', 'PSs_avg', 
                     'User1_avg', 'User2_avg', 'INC', 'NoGrade']
+    sort_order = [col for col in base_order if col in ss.canvasGrades_df.columns]
     additional_cols = [col for col in ss.canvasGrades_df.columns if col not in sort_order]
     sort_order += additional_cols
     ss.canvasGrades_df = ss.canvasGrades_df[sort_order]

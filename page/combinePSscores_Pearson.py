@@ -13,6 +13,7 @@
 #   so the psGradesForUpload.csv file can be used as is.
 
 import streamlit as st
+from streamlit import session_state as ss
 import pandas as pd
 import numpy as np
 import utils
@@ -23,7 +24,7 @@ def read_gradescope_csv():
            
         gs_df: SIS User ID, PS…
     """
-    if st.session_state['gradescope_key'] is not None:
+    if ss['gradescope_key'] is not None:
   
         # The Gradescope csv's have a bunch of columns that are not useful to us. We avoid loading that
         #   info using the info in sub_strings and usecols
@@ -32,12 +33,12 @@ def read_gradescope_csv():
         columns = ["SID"]
         usecols = lambda x: (x in columns) or ((x.startswith('PS')) and (not any(s in x for s in sub_strings)))
     
-        gs_df = pd.read_csv(st.session_state['gradescope_key'],
+        gs_df = pd.read_csv(ss['gradescope_key'],
                                  dtype=str,
                                  usecols = usecols
                                  )
         gs_df.rename(columns={'SID': 'SIS User ID'}, inplace=True)
-        st.session_state['gs_df'] = gs_df
+        ss['gs_df'] = gs_df
 
 
 def read_pearson_csv():
@@ -45,18 +46,18 @@ def read_pearson_csv():
            
         pearson_df: SIS User ID, SIS Login ID, Section, PS…
     """
-    if st.session_state['pearson_key'] is not None:
+    if ss['pearson_key'] is not None:
   
         # Read in the required columns of canvas csv 
         columns = ["Student ID", "ID", "SIS User ID", "SIS Login ID", "Section"]   # All required for re-upload
         usecols = lambda x: (x in columns) or (x.startswith('PS '))
-        pearson_df = pd.read_csv(st.session_state['pearson_key'],
+        pearson_df = pd.read_csv(ss['pearson_key'],
                              dtype=str,
                              skiprows=3,
                              usecols = usecols
                              )
         pearson_df.rename(columns={'Student ID': 'SIS User ID'}, inplace=True)
-        st.session_state['pearson_df'] = pearson_df
+        ss['pearson_df'] = pearson_df
 
 def read_canvas_csv():
     """ Reads the canvas gradebook from a csv. DOES NOT rename idiotic column names, 
@@ -65,49 +66,49 @@ def read_canvas_csv():
         cnv_df: Student, ID, SIS User ID, SIS Login ID, Section, PS…
     """
 
-    if st.session_state['canvas_key'] is not None:
+    if ss['canvas_key'] is not None:
   
         # Read in the required columns of canvas csv 
         columns = ["Student", "ID", "SIS User ID", "SIS Login ID", "Section"]   # All required for re-upload
         usecols = lambda x: (x in columns) or (x.startswith('PS '))
-        cnv_df = pd.read_csv(st.session_state['canvas_key'],
+        cnv_df = pd.read_csv(ss['canvas_key'],
                              dtype=str,
                              skiprows=[1,2],
                              usecols = usecols
                              )
         cnv_df = cnv_df[~cnv_df['Student'].str.contains('Student, Test', na=False)]
-        st.session_state['cnv_df'] = cnv_df
+        ss['cnv_df'] = cnv_df
 
 def reset_uploader():
     """Function to clear the uploaded file data and show the uploader again."""
-    st.session_state['cnv_df'] = None
-    st.session_state['pearson_df'] = None
-    st.session_state['gs_df'] = None
-    st.session_state['max_ps_num'] = -1
-    st.session_state['selected_PS'] = st.session_state['PS_select_list'][0]
-    st.session_state['last_PS'] = 0
+    ss['cnv_df'] = None
+    ss['pearson_df'] = None
+    ss['gs_df'] = None
+    ss['max_ps_num'] = -1
+    ss['selected_PS'] = ss['PS_select_list'][0]
+    ss['last_PS'] = 0
 
 def handle_PS_change():
-    selected_value = st.session_state['selected_PS']
-    st.session_state['last_PS'] = st.session_state['PS_select_list'].index(selected_value)
+    selected_value = ss['selected_PS']
+    ss['last_PS'] = ss['PS_select_list'].index(selected_value)
 
 # Initialization 
-if 'cnv_df' not in st.session_state:
-    st.session_state['cnv_df'] = None
-if 'pearson_df' not in st.session_state:
-    st.session_state['pearson_df'] = None
-if 'gs_df' not in st.session_state:
-    st.session_state['gs_df'] = None
-if 'max_ps_num' not in st.session_state:
-    st.session_state['max_ps_num'] = -1
-if 'toml_dict' not in st.session_state:
+if 'cnv_df' not in ss:
+    ss['cnv_df'] = None
+if 'pearson_df' not in ss:
+    ss['pearson_df'] = None
+if 'gs_df' not in ss:
+    ss['gs_df'] = None
+if 'max_ps_num' not in ss:
+    ss['max_ps_num'] = -1
+if 'toml_dict' not in ss:
     utils.read_prefs()
-if 'last_PS' not in st.session_state:
-    st.session_state['last_PS'] = 0
-st.session_state['PS_select_list'] = ['None']
+if 'last_PS' not in ss:
+    ss['last_PS'] = 0
+ss['PS_select_list'] = ['None']
 for i in range(14):
     ps_str = 'PS ' + str(i + 1)
-    st.session_state['PS_select_list'].append(ps_str)
+    ss['PS_select_list'].append(ps_str)
 
 st.markdown('## Combine PS Scores for Upload to Canvas')
 
@@ -119,27 +120,27 @@ st.button("Reset or work on a different course.",
             on_click=reset_uploader,
             type = 'primary')
 
-if st.session_state['last_PS'] < 1:
+if ss['last_PS'] < 1:
     st.selectbox(
         'Start by selecting the LAST PS to be combined', # Label for the dropdown
-        st.session_state['PS_select_list'],                         # The options to display
+        ss['PS_select_list'],                         # The options to display
         key = 'selected_PS',                # Always start at none selected
         on_change=handle_PS_change
     )
 else:
-    info_str = '#### Combining grades through PS ' + str(st.session_state['last_PS']) + ' using Grade = '
-    info_str += "{:.2f}".format(1 - float(st.session_state['toml_dict']['user']['pct_pearson'])) 
+    info_str = '#### Combining grades through PS ' + str(ss['last_PS']) + ' using Grade = '
+    info_str += "{:.2f}".format(1 - float(ss['toml_dict']['user']['pct_pearson'])) 
     info_str += ' Gradescope + ' 
-    info_str += "{:.2f}".format(float(st.session_state['toml_dict']['user']['pct_pearson'])) 
+    info_str += "{:.2f}".format(float(ss['toml_dict']['user']['pct_pearson'])) 
     info_str += ' Pearson. The weighting can be changed in Settings.'
     st.markdown(info_str)
 
-if st.session_state['last_PS'] > 0:
+if ss['last_PS'] > 0:
     info_str = '#### Upload csv\'s from Gradescope, Pearson, and Canvas.' 
     st.write(info_str)
     
     # Logic to display the Gradescope file uploader
-    if st.session_state['gs_df'] is None:
+    if ss['gs_df'] is None:
         # Display the uploader only if no file has been uploaded yet
         st.file_uploader(
             "Upload Gradescope gradebook here:",
@@ -152,7 +153,7 @@ if st.session_state['last_PS'] > 0:
         st.write('#### :gray[Gradescope gradebook already uploaded.]')
     
     # Logic to display the Pearson file uploader
-    if st.session_state['pearson_df'] is None:
+    if ss['pearson_df'] is None:
         # Display the uploader only if no file has been uploaded yet
         st.file_uploader(
             "Upload Pearson gradebook here:",
@@ -165,7 +166,7 @@ if st.session_state['last_PS'] > 0:
         st.write('#### :gray[Pearson gradebook already uploaded.]')
     
     # Logic to display the Canvas gradebook file uploader
-    if st.session_state['cnv_df'] is None:
+    if ss['cnv_df'] is None:
         # Display the uploader only if no file has been uploaded yet
         st.file_uploader(
             "Upload Canvas gradebook here:",
@@ -178,20 +179,21 @@ if st.session_state['last_PS'] > 0:
         st.write('#### :gray[Canvas gradebook already uploaded.]')
 
     # If all df's loaded, do the analysis
-    if all(v is not None for v in [st.session_state['cnv_df'],st.session_state['pearson_df'],st.session_state['gs_df']]):
+    if all(v is not None for v in [ss['cnv_df'],ss['pearson_df'],ss['gs_df']]):
         
         # Work on local copies 
-        cnv_df = st.session_state['cnv_df'].copy()
-        pearson_df = st.session_state['pearson_df'].copy()
-        gs_df = st.session_state['gs_df'].copy()
+        cnv_df = ss['cnv_df'].copy()
+        pearson_df = ss['pearson_df'].copy()
+        gs_df = ss['gs_df'].copy()
         
-        # Find the ps numbers included in the canvas gradebook. These cannot be modified
+        # Find the ps numbers included in the canvas gradebook. These cannot be modified.
+        # Drop the columns after the last to be transferred
         cnv_ps_columns = [col for col in cnv_df.columns if col.startswith('PS ') and col[3].isdigit()]
         ps_numbers = []
         ps_numbers_to_remove = []
         for col in cnv_ps_columns:
             ps_num = int(re.search(r'PS\s*(\d+)', col).group(1))
-            if ps_num <= st.session_state['last_PS']:
+            if ps_num <= ss['last_PS']:
                 ps_numbers.append(ps_num)
             else:
                 cnv_df.drop(columns = [col], inplace=True)
@@ -204,7 +206,7 @@ if st.session_state['last_PS'] > 0:
         cnv_ps_columns = [col for col in cnv_df.columns if col.startswith('PS ') and col[3].isdigit()]
                 
         # Add a column of 0's if either gs or pearson is missing a PS
-        st.session_state['max_ps_num'] = -1
+        ss['max_ps_num'] = -1
         for i, ps_num in enumerate(ps_numbers):
             cnv_col_name = cnv_ps_columns[i]
             gs_col_name = 'PS ' + str(ps_num)
@@ -216,8 +218,8 @@ if st.session_state['last_PS'] > 0:
             if pearson_col_name not in pearson_df.columns:
                 pearson_df[pearson_col_name] = 0
             
-            if i > st.session_state['max_ps_num']:
-                st.session_state['max_ps_num'] = i
+            if i > ss['max_ps_num']:
+                ss['max_ps_num'] = i
                 
         # Merge the three dfs into a single merged_df
         merged_df = pd.merge(cnv_df, gs_df, on='SIS User ID', how='left')
@@ -244,7 +246,7 @@ if st.session_state['last_PS'] > 0:
             psScale = 0.0
             if max_gs_col > 0:
                 if(max_pearson_col > 0):
-                    pct_pearson = float(st.session_state['toml_dict']['user']['pct_pearson'])
+                    pct_pearson = float(ss['toml_dict']['user']['pct_pearson'])
                     gsScale = 100 * (1 - pct_pearson)/max_gs_col
                     psScale = 100 * pct_pearson/max_pearson_col
                 else:
