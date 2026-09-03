@@ -4,13 +4,15 @@ import tomlkit
 import os
 from tomlkit import comment, document, nl, table
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date
 import gspread
 from gspread.exceptions import WorksheetNotFound
 from oauth2client.service_account import ServiceAccountCredentials
+from googleapiclient.discovery import build
 import time
 import re
 from tenacity import retry, stop_after_attempt, wait_fixed
+from streamlit import session_state as ss
 
 def test_for_new_keys():
     """ As new preferences are added to prefs.toml, we need a way to evolve the file format
@@ -19,18 +21,18 @@ def test_for_new_keys():
         prefs.toml if changes have been made. 
      """
     
-    start_num_keys = len(st.session_state['toml_dict']['user'])
+    start_num_keys = len(ss['toml_dict']['user'])
     
     # New keys since initial Alfred
-    st.session_state['toml_dict']['user'].setdefault('pct_pearson', 0.5)
+    ss['toml_dict']['user'].setdefault('pct_pearson', 0.5)
     long_str = '2070: [\'Density\', \'Determination\', \'Recycling\','
     long_str += '\'Iron\', \'Unknown\', \'Vitamin\', \'Optical\', \'Copper\','
     long_str += '\'Mole\', \'Gas\']'
-    st.session_state['toml_dict']['user'].setdefault('lab_order', long_str)
-    st.session_state['toml_dict']['user'].setdefault('canvas_domain', '')
+    ss['toml_dict']['user'].setdefault('lab_order', long_str)
+    ss['toml_dict']['user'].setdefault('canvas_domain', '')
     
     # Rewrite prefs if necessary
-    if len(st.session_state['toml_dict']['user']) > start_num_keys: # Key added to existing pref file
+    if len(ss['toml_dict']['user']) > start_num_keys: # Key added to existing pref file
         write_prefs()  
 
 def read_prefs():
@@ -46,27 +48,30 @@ def read_prefs():
                         'version': '1.0',
                         'late_minutes': 5.0,
                         'start_date': '2026-01-26',
-                        'spreadsheet_name': 'Lab Attendance, Spring 2026',
-                        'allowed_classes': '2070, 2510, Test',
+                        'spreadsheet_name': 'Lab Attendance, Spring 2026', # Outdated. No longer set by user.
+                        'allowed_classes': '2070, 2510, Test',  # Outdated. No longer set by user.
                         'skip_days': '2070: [], 2510: [2026-02-12, 2026-02-13], Test: [2026-02-12, 2026-02-13]',
                         'pct_pearson': 0.5,
                         'lab_order': long_str,
                         'canvas_domain': ''
                         }
                     }
-        st.session_state['toml_dict'] = toml_dict
+        ss['toml_dict'] = toml_dict
         write_prefs()
     else:
         with open(prefs_file_path, 'r') as fp:
             config = tomlkit.load(fp)
         
-        st.session_state['toml_dict'] = config
+        ss['toml_dict'] = config
         
         test_for_new_keys()
+    
+    # Overwrite outdated prefs
+    ss['toml_dict']['user']['allowed_classes'] = '2070, 2080, 2510, Test'
             
 def write_prefs():
 
-    toml_dict = st.session_state['toml_dict']
+    toml_dict = ss['toml_dict']
     
     # Create new TOML document object
     config = document()
@@ -99,8 +104,79 @@ def write_prefs():
     with open(prefs_file_path, 'w') as fp:
         fp.write(tomlkit.dumps(config))
     
-    st.session_state['file_dirty'] = False
+    ss['file_dirty'] = False
 
+def currentTerm():
+    """ Guesses the current semester based on today's date, e.g. Fall 2026. From microscope/downloadResults.py"""
+    today = date.today()
+    springEnd = datetime.strptime('May 20 2025', '%b %d %Y').date().replace(year=today.year)
+    summerEnd = datetime.strptime('Aug 20 2025', '%b %d %Y').date().replace(year=today.year)
+    term = 'Spring' if today < springEnd else ('Summer' if today < summerEnd else 'Fall')
+    curTerm = term + ' ' + str(today.year)
+    return curTerm
+
+def get_google_attendance_workbook_names():
+    
+    # Authenticate using your service account
+    scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
+         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+    google_service_account_info = st.secrets['google_service_account']
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(google_service_account_info, scope)
+
+    drive_service = build('drive', 'v3', credentials=creds)
+    shared_drive_id ='CAS-CHEM_Lab_Attendance'
+    
+    # Query Drive for files matching the Google Sheets MIME type
+    query = "mimeType = 'application/vnd.google-apps.spreadsheet'and trashed = false"
+    results = drive_service.files().list(
+        q = query,
+        corpora='allDrives',  # Searches across all drives the account can see
+        includeItemsFromAllDrives=True,
+        supportsAllDrives=True,
+        fields="files(id, name, parents)"
+    ).execute()
+    
+    workbooks = results.get('files', [])
+    attendance_workbooks = [
+        workbook['name'] 
+        for workbook in workbooks 
+        if workbook['name'].startswith('Lab Attendance')
+    ]
+    return attendance_workbooks
+
+def get_google_attendance_workbook_courses(attendance_workbook_name):
+
+    # Authenticate using your service account
+    scope = ["https://spreadsheets.google.com/feeds", 'https://www.googleapis.com/auth/spreadsheets',
+         "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+    google_service_account_info = st.secrets['google_service_account']
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(google_service_account_info, scope)
+
+    drive_service = build('drive', 'v3', credentials=creds)
+    sheets_service = build("sheets", "v4", credentials=creds)
+    shared_drive_id ='CAS-CHEM_Lab_Attendance'
+    
+    # Search for the file ID using the Drive API
+    query = f"name = '{attendance_workbook_name}' and mimeType = 'application/vnd.google-apps.spreadsheet'"
+    response = drive_service.files().list(
+        q=query,
+        fields="files(id, name)",
+        corpora="allDrives",                      # Searches the specified driveId
+        #driveId=shared_drive_id,               # The target Shared Drive ID
+        includeItemsFromAllDrives=True,        # Required to find items in Shared Drives
+        supportsAllDrives=True                 # Acknowledges application supports Shared Drives
+    ).execute()
+    files = response.get('files', [])
+    attendance_workbook_id = files[0]['id']
+    
+    sheet_metadata = sheets_service.spreadsheets().get(spreadsheetId = attendance_workbook_id).execute()
+    sheets = sheet_metadata.get('sheets', [])
+    
+    sheet_names = [sheet.get("properties", {}).get("title") for sheet in sheets]
+    courses = [sheet for sheet in sheet_names if len(sheet) == 9]   # The courses are exactly 9 characters in length
+
+    return courses
+    
 @retry(
     stop=stop_after_attempt(5), # Stop after a maximum of 5 attempts
     wait=wait_fixed(1) 
@@ -114,7 +190,7 @@ def read_google_sheet_with_retry(sheetName, msg):   # Open Sheet, then read enti
     google_service_account_info = st.secrets['google_service_account']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(google_service_account_info, scope)
     client = gspread.authorize(creds)
-    sh = client.open(st.session_state['toml_dict']['user']['spreadsheet_name'])
+    sh = client.open(ss['toml_dict']['user']['spreadsheet_name'])
     
     # Open the appropriate sheet and read it
     data = sh.worksheet(sheetName).get_all_values()
@@ -125,7 +201,7 @@ def read_roster_sheet():
 
     # Now open the sheet for the roster and read
     try:
-        data = read_google_sheet_with_retry(st.session_state['rosterSheetName'], 'roster')
+        data = read_google_sheet_with_retry(ss['rosterSheetName'], 'roster')
     except Exception as e:
         st.error(f'Failed after retries (likely wifi issue):: {e}')
         return -1, None
@@ -151,11 +227,11 @@ def read_canvas_gradebook_csv():
         canvas_df: ID, netID, studentName, sectionNumber
     """
 
-    if st.session_state['canvas_gradebook_key'] is not None:
+    if ss['canvas_gradebook_key'] is not None:
   
         # Read in the required columns of canvas csv 
         columns = ["Student", "SIS User ID", "SIS Login ID", "Section"]
-        canvas_df = pd.read_csv(st.session_state['canvas_gradebook_key'],
+        canvas_df = pd.read_csv(ss['canvas_gradebook_key'],
                              dtype=str,
                              skiprows=[1,2],
                              usecols = columns
@@ -165,8 +241,8 @@ def read_canvas_gradebook_csv():
         canvas_df = canvas_df[['ID', 'netID', 'studentName', 'allSections']]
         canvas_df['sectionNumber'] = canvas_df['allSections'].str.extract(r'LAB(\d{3})')
         canvas_df.drop(columns=['allSections'], inplace=True)
-        st.session_state['gradebook_uploaded'] = True
-        st.session_state['canvas_df'] = canvas_df
+        ss['gradebook_uploaded'] = True
+        ss['canvas_df'] = canvas_df
         
 #     st.markdown('## Canvas_df')
 #     st.dataframe(canvas_df)
@@ -183,7 +259,7 @@ def append_row_to_google_sheet(spreadsheet_name, spreadsheet_entry):
     google_service_account_info = st.secrets['google_service_account']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(google_service_account_info, scope)
     client = gspread.authorize(creds)
-    sh = client.open(st.session_state['toml_dict']['user']['spreadsheet_name'])
+    sh = client.open(ss['toml_dict']['user']['spreadsheet_name'])
     sheetName = sh.worksheet(spreadsheet_name)    
     sheetName.append_row(spreadsheet_entry) # Actual spreadsheet entry
     alert.empty()
@@ -212,17 +288,17 @@ def check_if_sheet_exists(sheet_title):
         # print(f"An error occurred: {e}")
         return False
 
-def init_course_select_list(): # Initiates st.session_state['course_select_list'] and st.session_state['last_selected_course']
+def init_course_select_list(): # Initiates ss['course_select_list'] and ss['last_selected_course']
     # Set up logic for course selection list
-    if 'course_select_list' not in st.session_state:
+    if 'course_select_list' not in ss:
         # Make a list of attendance sheets from allowed classes in settings
         processed_list = ['None selected'] + [
-            f"Chem_{item}" if item.strip().isdigit() else item.strip() 
-            for item in re.split(',\\s*', st.session_state['toml_dict']['user']['allowed_classes'])
+            f"Chem_{item}" if (item.strip().isdigit() or item.strip().lower() == 'test') else item.strip() 
+            for item in re.split(',\\s*', ss['toml_dict']['user']['allowed_classes'])
         ]
-        st.session_state['course_select_list'] = processed_list
-    if 'last_selected_course' not in st.session_state:
-        st.session_state['last_selected_course'] = st.session_state['course_select_list'][0]
+        ss['course_select_list'] = processed_list
+    if 'last_selected_course' not in ss:
+        ss['last_selected_course'] = ss['course_select_list'][0]
     
 def shared_sidebar():
     image_path = os.path.join(os.path.dirname(__file__), 'assets', 'Hobbes_glasses.png')

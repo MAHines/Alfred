@@ -17,6 +17,7 @@ import re
 import ast
 import plotly.express as px
 import plotly.graph_objects as go
+from streamlit import session_state as ss
 
 def read_timesheet():
     """ Read the in/out timesheet from the shared Google doc. Produce timesheet_df, calcRoster_df, and enrollment_df.
@@ -29,7 +30,7 @@ def read_timesheet():
          """
 
     try:
-        data = utils.read_google_sheet_with_retry(st.session_state['timesheetName'], 'attendance')
+        data = utils.read_google_sheet_with_retry(ss['timesheetName'], 'attendance')
     except Exception as e:
         st.error(f'Failed after retries (likely wifi issue): {e}')
         return(-1, None, None, None)
@@ -46,11 +47,11 @@ def read_timesheet():
     
     # Take care of "skipped days." For example, if 2/12 and 2/13 were skipped, then those students attended on 2/19 and 2/20,
     #   Therefore, we will 'pretend' 2/19 = 2/12 and 2/20 = 2/13.
-    start_key = st.session_state['timesheetName'][-4:] + ':'
-    start_marker = st.session_state['toml_dict']['user']['skip_days'].find(start_key) + len(start_key)
-    content_start = st.session_state['toml_dict']['user']['skip_days'].find('[', start_marker)
-    content_end = st.session_state['toml_dict']['user']['skip_days'].find(']', content_start)
-    skip_days_str = st.session_state['toml_dict']['user']['skip_days'][content_start:content_end + 1]
+    start_key = ss['timesheetName'][-4:] + ':'
+    start_marker = ss['toml_dict']['user']['skip_days'].find(start_key) + len(start_key)
+    content_start = ss['toml_dict']['user']['skip_days'].find('[', start_marker)
+    content_end = ss['toml_dict']['user']['skip_days'].find(']', content_start)
+    skip_days_str = ss['toml_dict']['user']['skip_days'][content_start:content_end + 1]
     date_strings = skip_days_str.strip('[]').replace(' ', '').split(',')
     datetime_skip_days = [pd.to_datetime(date_str).date() for date_str in date_strings]
     datetime_adv_days = [dt + timedelta(weeks=1) for dt in datetime_skip_days]  # Dates that replaced skipped days
@@ -80,15 +81,20 @@ def read_timesheet():
     
     # Now remove any rows where 'existsID' is False
     unknown_df = timesheet_df[~timesheet_df['existsID']]
-    st.session_state['unknown_df'] = unknown_df
+    ss['unknown_df'] = unknown_df
     timesheet_df = timesheet_df[timesheet_df['existsID']]
     
     # Find assigned sections
     timesheet_df['sectionAssigned'] = timesheet_df['actualID'].astype('string').map(mapSeries_ID_to_section)
     
+    # Need to calculate the starting date of the labs to calculate week number. Assume
+    day_counts = timesheet_df['Log time'].dt.date.value_counts()
+    earliest_date = day_counts[day_counts >= 5].index.min() # Use earliest date with at least 5 entries
+    ss['toml_dict']['user']['start_date'] = pd.Timestamp(earliest_date).to_period('W').to_timestamp().strftime("%Y-%m-%d") # Now find the Monday of that week
+    
     # Calculate week
-    timesheet_df['weekNum'] = np.floor((timesheet_df['Log time'] - pd.to_datetime(st.session_state['toml_dict']['user']['start_date'], format = '%Y-%m-%d'))/timedelta(weeks = 1)) # Saves as integer
-    timesheet_df['week'] = (pd.to_datetime(st.session_state['toml_dict']['user']['start_date'], format = '%Y-%m-%d') + timesheet_df['weekNum'] * timedelta(weeks = 1)).dt.strftime('%m/%d')
+    timesheet_df['weekNum'] = np.floor((timesheet_df['Log time'] - pd.to_datetime(ss['toml_dict']['user']['start_date'], format = '%Y-%m-%d'))/timedelta(weeks = 1)) # Saves as integer
+    timesheet_df['week'] = (pd.to_datetime(ss['toml_dict']['user']['start_date'], format = '%Y-%m-%d') + timesheet_df['weekNum'] * timedelta(weeks = 1)).dt.strftime('%m/%d')
     
     # In wrong section
     timesheet_df['inWrongSection'] = timesheet_df['sectionAttended'] != timesheet_df['sectionAssigned']
@@ -194,7 +200,7 @@ def produce_summary(timesheet_df):
     wkSummary_df.loc[maskAM, 'tardyTime'] = wkSummary_df['In'] - wkSummary_df['In'].dt.normalize() - timedelta(hours = 8)
     wkSummary_df.loc[maskPM, 'tardyTime'] = wkSummary_df['In'] - wkSummary_df['In'].dt.normalize() - timedelta(hours = 13, minutes = 25)
     wkSummary_df['tardyTime'] = (wkSummary_df['tardyTime'].dt.total_seconds()/60.0).clip(lower = 0)
-    wkSummary_df['tardy'] = wkSummary_df['tardyTime'] > st.session_state['toml_dict']['user']['late_minutes']
+    wkSummary_df['tardy'] = wkSummary_df['tardyTime'] > ss['toml_dict']['user']['late_minutes']
     
     conditions = [
         (wkSummary_df['In'].notnull() == True) & (wkSummary_df['tardy'] == False),
@@ -215,7 +221,7 @@ def produce_summary(timesheet_df):
         
     # Look up each student's assigned section
     shortSummary_df['ID'] = shortSummary_df.index.get_level_values(1)   # Kludge to get ID from index
-    calcRoster_df = st.session_state['calcRoster_df']
+    calcRoster_df = ss['calcRoster_df']
     mapSeries_ID_to_section = calcRoster_df.set_index('ID')['sectionAssigned']
     shortSummary_df['sect'] = shortSummary_df['ID'].map(mapSeries_ID_to_section)
     
@@ -345,16 +351,16 @@ def runAnalysis():
     error, timesheet_df, calcRoster_df, enrollment_df = read_timesheet()
     if error < 0:
         return error
-    st.session_state['timesheet_df'] = timesheet_df
-    st.session_state['calcRoster_df'] = calcRoster_df
+    ss['timesheet_df'] = timesheet_df
+    ss['calcRoster_df'] = calcRoster_df
     enrollment_df = enrollment_df.reset_index()
-    st.session_state['enrollment_df'] = enrollment_df
+    ss['enrollment_df'] = enrollment_df
 
     wkSummary_df, shortSummary_df = produce_summary(timesheet_df)
-    st.session_state['shortSummary_df'] = shortSummary_df
+    ss['shortSummary_df'] = shortSummary_df
     
     sectSummaryLong_df = produce_section_summary(wkSummary_df)
-    st.session_state['sectSummaryLong_df'] = sectSummaryLong_df
+    ss['sectSummaryLong_df'] = sectSummaryLong_df
     
     attendance_cols = shortSummary_df.columns[shortSummary_df.columns.map(lambda x: x[0]) == 'Attendance']
     absences_df = shortSummary_df[attendance_cols].copy()
@@ -367,11 +373,11 @@ def runAnalysis():
     tardies_df = shortSummary_df[tardyTime_cols].copy()
     tardies_df.columns = tardies_df.columns.droplevel(0)
     
-    mask = tardies_df > st.session_state['toml_dict']['user']['late_minutes']
+    mask = tardies_df > ss['toml_dict']['user']['late_minutes']
     tardies_df['totalTardies'] = mask.sum(axis=1)
 
-    st.session_state['absences_df'] = absences_df
-    st.session_state['tardies_df'] = tardies_df   
+    ss['absences_df'] = absences_df
+    ss['tardies_df'] = tardies_df   
     
     return 0 
         
@@ -385,65 +391,87 @@ def runAnalysis():
 #     st.dataframe(sectSummaryLong_df)
 
 def handle_course_change():
-    if st.session_state['selected_course'] == 'None selected':
-        st.write('st.session_state[selected_course] == None selected called unexpectedly')
-        st.session_state['analysis_needs_update'] = False
-        st.session_state['display_ready'] = False
-        st.session_state['attendance_title_str'] = '# Attendance Report'
-    elif st.session_state['selected_course'] == st.session_state['cur_analyzed_course']:
-        st.session_state['analysis_needs_update'] = False
+    if ss['selected_course'] == 'None selected':
+        st.write('ss[selected_course] == None selected called unexpectedly')
+        ss['analysis_needs_update'] = False
+        ss['display_ready'] = False
+        ss['attendance_title_str'] = '# Attendance Report'
+    elif ss['selected_course'] == ss['cur_analyzed_course']:
+        ss['analysis_needs_update'] = False
     else:    
-        st.session_state['timesheetName'] = st.session_state['selected_course']
-        st.session_state['rosterSheetName'] = st.session_state['selected_course'] + '_Roster'
-        st.session_state['analysis_needs_update'] = True
-    st.session_state['last_selected_course'] = st.session_state['selected_course']
-    st.session_state['selected_course'] = 'None selected'
+        ss['timesheetName'] = ss['selected_course']
+        ss['rosterSheetName'] = ss['selected_course'] + '_Roster'
+        ss['analysis_needs_update'] = True
+    ss['last_selected_course'] = ss['selected_course']
+    ss['selected_course'] = 'None selected'
+    
+def handle_semester_change():
+    attendance_workbook_name = 'Lab Attendance, ' + ss['selected_semester']
+    courses_in_selected_semester = ['None selected'] + utils.get_google_attendance_workbook_courses(attendance_workbook_name)
+    ss['toml_dict']['user']['spreadsheet_name'] = attendance_workbook_name
+    ss['course_select_list'] = courses_in_selected_semester 
 
 def update_attendance_title_str():
-    st.session_state['attendance_title_str'] = '# ' + st.session_state['cur_analyzed_course'].replace("_", " ") + ' Attendance Report'
-    attendTitleContainer.write(st.session_state['attendance_title_str'])
+    ss['attendance_title_str'] = '# ' + ss['cur_analyzed_course'].replace("_", " ") + ' Attendance Report'
+    attendTitleContainer.write(ss['attendance_title_str'])
 
 # Initialization
-if 'analysis_needs_update' not in st.session_state:
-    st.session_state['analysis_needs_update'] = False
-if 'display_ready' not in st.session_state:
-    st.session_state['display_ready'] = False
-if 'analysis_complete' not in st.session_state:
-    st.session_state['analysis_complete'] = False
-if 'toml_dict' not in st.session_state:
+if 'analysis_needs_update' not in ss:
+    ss['analysis_needs_update'] = False
+if 'display_ready' not in ss:
+    ss['display_ready'] = False
+if 'analysis_complete' not in ss:
+    ss['analysis_complete'] = False
+if 'toml_dict' not in ss:
     utils.read_prefs()
-if 'cur_analyzed_course' not in st.session_state:
-    st.session_state['cur_analyzed_course'] = ''
-if 'attendance_title_str' not in st.session_state:
-    st.session_state['attendance_title_str'] = '# Attendance Report'
-    
-utils.init_course_select_list()  # Initiates st.session_state['course_select_list']
+if 'cur_analyzed_course' not in ss:
+    ss['cur_analyzed_course'] = ''
+if 'attendance_title_str' not in ss:
+    ss['attendance_title_str'] = '# Attendance Report'
+if 'attendance_workbooks' not in ss:
+    ss['attendance_workbooks'] = utils.get_google_attendance_workbook_names()
+if 'valid_semesters' not in ss:
+    ss['valid_semesters'] = [item.removeprefix('Lab Attendance, ') for item in ss['attendance_workbooks']]
+    season_order = {'Spring': 1, 'Summer': 2, 'Fall': 3, 'Winter': 4}
+    ss['valid_semesters'].sort(key=lambda x: (int(x.split()[1]), season_order[x.split()[0]]), reverse=True) # Sort in reverse chronology
+    ss['selected_semester'] = ss['valid_semesters'][0]  # Most recent semester
+    handle_semester_change()    
 
-attendTitleContainer = st.container(border = False)
+attendTitleContainer = st.container(border = False) # Also writes title
     
 st.selectbox(
+    'Semester to be analyzed', # Label for the dropdown
+    ss['valid_semesters'],                         # The options to display
+    key = 'selected_semester',
+    on_change=handle_semester_change
+)
+
+# utils.init_course_select_list()  # Initiates ss['course_select_list']
+
+st.selectbox(
     'New course to be analyzed', # Label for the dropdown
-    st.session_state['course_select_list'],                         # The options to display
+    ss['course_select_list'],                         # The options to display
     key = 'selected_course',                # Always start at none selected
     on_change=handle_course_change
 )
 
-if st.session_state['analysis_needs_update']:
+
+if ss['analysis_needs_update']:
     error = runAnalysis()
     if error == 0:
-        st.session_state['analysis_needs_update'] = False
-        st.session_state['display_ready'] = True
-        st.session_state['cur_analyzed_course'] = st.session_state['timesheetName']
+        ss['analysis_needs_update'] = False
+        ss['display_ready'] = True
+        ss['cur_analyzed_course'] = ss['timesheetName']
 
 # Does the actual display if the data are ready for display
-if st.session_state['display_ready']:
-    timesheet_df = st.session_state['timesheet_df']
-    calcRoster_df = st.session_state['calcRoster_df']
-    shortSummary_df = st.session_state['shortSummary_df']
-    sectSummaryLong_df = st.session_state['sectSummaryLong_df']
-    enrollment_df = st.session_state['enrollment_df']
-    absences_df = st.session_state['absences_df']
-    tardies_df = st.session_state['tardies_df']
+if ss['display_ready']:
+    timesheet_df = ss['timesheet_df']
+    calcRoster_df = ss['calcRoster_df']
+    shortSummary_df = ss['shortSummary_df']
+    sectSummaryLong_df = ss['sectSummaryLong_df']
+    enrollment_df = ss['enrollment_df']
+    absences_df = ss['absences_df']
+    tardies_df = ss['tardies_df']
 
     st.dataframe(shortSummary_df)
     
@@ -477,17 +505,17 @@ if st.session_state['display_ready']:
     st.markdown("## Multiple Tardiness (T > 1)")
     st.dataframe(selectedTardyRows)
 
-    st.session_state['plot_week'] = timesheet_df['week'].unique().tolist()
-    st.session_state['plot_week'].reverse()
+    ss['plot_week'] = timesheet_df['week'].unique().tolist()
+    ss['plot_week'].reverse()
     
     # Select the default week to plot. We would like this to be the last complete week
     default_week = 0
 
-    if 'selected_plot_week' not in st.session_state:
-        st.session_state['selected_plot_week'] = st.session_state['plot_week'][default_week]
+    if 'selected_plot_week' not in ss:
+        ss['selected_plot_week'] = ss['plot_week'][default_week]
     st.selectbox(
         'Week being plotted', # Label for the dropdown
-        st.session_state['plot_week'],                         # The options to display
+        ss['plot_week'],                         # The options to display
         key = 'selected_plot_week'#,
         #on_change = handle_plot_week_change
     )
@@ -498,15 +526,15 @@ if st.session_state['display_ready']:
     sections_list = temp_df.values.tolist()
     
     for row in sections_list:
-        fig = prepare_plot(sectSummaryLong_df, row[0], row[1], st.session_state['selected_plot_week'], enrollment_df)
+        fig = prepare_plot(sectSummaryLong_df, row[0], row[1], ss['selected_plot_week'], enrollment_df)
         with st.container():
             st.plotly_chart(fig, width ='stretch')
 
-    st.markdown("## Processed Raw Data")
-    st.dataframe(timesheet_df)
+#     st.markdown("## Processed Raw Data")
+#     st.dataframe(timesheet_df)
     
     st.markdown('## Unknown entries')
-    st.dataframe(st.session_state['unknown_df'])
+    st.dataframe(ss['unknown_df'])
 
 update_attendance_title_str()
 utils.shared_sidebar()
